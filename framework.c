@@ -10,21 +10,38 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+inline ef_queue_fd_t *ef_alloc_fd(ef_runtime_t *rt) __attribute__((always_inline));
+inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket) __attribute__((always_inline));
+
 long ef_proc(void *param)
 {
-    ef_routine_t *er = ef_routine_current();
+    ef_routine_t *er = (ef_routine_t*)param;
     int fd = er->poll_data.fd;
     long retval = 0;
     if(er->poll_data.ef_proc)
     {
-        retval = er->poll_data.ef_proc(fd);
+        retval = er->poll_data.ef_proc(fd, er);
     }
     shutdown(fd, SHUT_RDWR);
     close(fd);
     return retval;
 }
 
-int event_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
+inline ef_queue_fd_t *ef_alloc_fd(ef_runtime_t *rt)
+{
+    ef_queue_fd_t *qf = NULL;
+    if(!list_empty(&rt->free_fd_list))
+    {
+        qf = CAST_PARENT_PTR(list_remove_after(&rt->free_fd_list), ef_queue_fd_t, list_entry);
+    }
+    else
+    {
+        qf = (ef_queue_fd_t*)malloc(sizeof(ef_queue_fd_t));
+    }
+    return qf;
+}
+
+inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
 {
     ef_routine_t *er = (ef_routine_t*)ef_coroutine_create(&rt->co_pool, ef_proc, NULL);
     if(er)
@@ -46,10 +63,11 @@ int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max)
     rt->stopping = 0;
     ef_coroutine_pool_init(&rt->co_pool, stack_size, limit_min, limit_max);
     list_init(&rt->listen_list);
-    return rt->epfd < 0;
+    list_init(&rt->free_fd_list);
+    return rt->epfd < 0 ? -1 : 0;
 }
 
-int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t ef_proc)
+int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t proc)
 {
     int retval = fcntl(socket, F_SETFL, fcntl(socket, F_GETFL) | O_NONBLOCK);
     if(retval < 0)
@@ -65,8 +83,8 @@ int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t ef_proc)
     li->poll_data.fd = socket;
     li->poll_data.routine_ptr = NULL;
     li->poll_data.runtime_ptr = rt;
-    li->ef_proc = ef_proc;
-    list_init(&li->queue_list);
+    li->ef_proc = proc;
+    list_init(&li->fd_list);
     list_insert_after(&rt->listen_list, &li->list_entry);
     return 0;
 }
@@ -92,41 +110,40 @@ int ef_run_loop(ef_runtime_t *rt)
     while(1)
     {
         retval = epoll_wait(rt->epfd, &evts[0], 1024, 1000);
-        if(retval < 0)
+        if(retval < 0 && errno != EINTR)
         {
             return retval;
         }
         printf("all_count: %ld\nrun_count: %ld\n", rt->co_pool.full_count, rt->co_pool.full_count - rt->co_pool.free_count);
         for(int i = 0; i < retval; ++i)
         {
-            ef_epoll_data_t *pfi = (ef_epoll_data_t*)evts[i].data.ptr;
-            if(pfi->type == POLL_TYPE_RDWRCON)
+            ef_epoll_data_t *ed = (ef_epoll_data_t*)evts[i].data.ptr;
+            if(ed->type == POLL_TYPE_RDWRCON)
             {
-                ef_coroutine_resume(&rt->co_pool, &pfi->routine_ptr->co, evts[i].events);
+                ef_coroutine_resume(&rt->co_pool, &ed->routine_ptr->co, evts[i].events);
             }
-            else if(pfi->type == POLL_TYPE_LISTEN)
+            else if(ed->type == POLL_TYPE_LISTEN)
             {
                 int retval = 0;
                 while(1)
                 {
-                    int socket = accept(pfi->fd, NULL, NULL);
+                    int socket = accept(ed->fd, NULL, NULL);
                     if(socket < 0)
                     {
                         break;
                     }
-                    fcntl(socket, F_SETFL, fcntl(socket, F_GETFL) | O_NONBLOCK);
-                    ef_listen_info_t *pli = CAST_PARENT_PTR(pfi, ef_listen_info_t, poll_data);
+                    ef_listen_info_t *li = CAST_PARENT_PTR(ed, ef_listen_info_t, poll_data);
                     if(retval >= 0)
                     {
-                        retval = event_routine_run(rt, pli->ef_proc, socket);
+                        retval = ef_routine_run(rt, li->ef_proc, socket);
                     }
                     if(retval < 0)
                     {
-                        ef_queue_fd_t *qi = (ef_queue_fd_t*)malloc(sizeof(ef_queue_fd_t));
-                        if(qi)
+                        ef_queue_fd_t *qf = ef_alloc_fd(rt);
+                        if(qf)
                         {
-                            qi->fd = socket;
-                            list_insert_before(&pli->queue_list, &qi->list_entry);
+                            qf->fd = socket;
+                            list_insert_before(&li->fd_list, &qf->list_entry);
                         }
                         else
                         {
@@ -141,20 +158,20 @@ int ef_run_loop(ef_runtime_t *rt)
         while(lle != &rt->listen_list)
         {
             ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
-            dlist_entry_t *qie = list_entry_after(&li->queue_list);
-            while(qie != &li->queue_list)
+            dlist_entry_t *fle = list_entry_after(&li->fd_list);
+            while(fle != &li->fd_list)
             {
-                ef_queue_fd_t *qi = CAST_PARENT_PTR(qie, ef_queue_fd_t, list_entry);
-                qie = list_entry_after(qie);
-                int retval = event_routine_run(rt, li->ef_proc, qi->fd);
+                ef_queue_fd_t *qf = CAST_PARENT_PTR(fle, ef_queue_fd_t, list_entry);
+                fle = list_entry_after(fle);
+                int retval = ef_routine_run(rt, li->ef_proc, qf->fd);
                 if(retval < 0)
                 {
                     goto exit_queue;
                 }
                 else
                 {
-                    list_remove(&qi->list_entry);
-                    free(qi);
+                    list_remove(&qf->list_entry);
+                    list_insert_after(&rt->free_fd_list, &qf->list_entry);
                 }
             }
             lle = list_entry_after(lle);
@@ -164,15 +181,33 @@ exit_queue:
         {
             if(!list_empty(&rt->listen_list))
             {
-                lle = list_remove_after(&rt->listen_list);
-                while(lle != NULL)
+                lle = list_entry_after(&rt->listen_list);
+                while(lle != &rt->listen_list)
                 {
                     ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
-                    epoll_ctl(rt->epfd, EPOLL_CTL_DEL, li->poll_data.fd, &evt);
-                    shutdown(li->poll_data.fd, SHUT_RDWR);
-                    close(li->poll_data.fd);
-                    free(li);
-                    lle = list_remove_after(lle);
+                    lle = list_entry_after(lle);
+                    if(li->poll_data.fd > 0)
+                    {
+                        epoll_ctl(rt->epfd, EPOLL_CTL_DEL, li->poll_data.fd, &evt);
+                        shutdown(li->poll_data.fd, SHUT_RDWR);
+                        close(li->poll_data.fd);
+                        li->poll_data.fd = -1;
+                    }
+                    if(list_empty(&li->fd_list))
+                    {
+                        list_remove(&li->list_entry);
+                        free(li);
+                    }
+                }
+            }
+            if(!list_empty(&rt->free_fd_list))
+            {
+                dlist_entry_t *ffle = list_remove_after(&rt->free_fd_list);
+                while(ffle != NULL)
+                {
+                    ef_queue_fd_t *qf = CAST_PARENT_PTR(ffle, ef_queue_fd_t, list_entry);
+                    ffle = list_remove_after(&rt->free_fd_list);
+                    free(qf);
                 }
             }
             if(rt->co_pool.free_count == rt->co_pool.full_count)
@@ -190,42 +225,38 @@ exit_queue:
     return 0;
 }
 
-int ef_wrap_socket(int domain, int type, int protocol)
+int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
-    int fd = socket(domain, type, protocol);
-    if(fd < 0)
+    if(er == NULL)
     {
-        return fd;
+        er = ef_routine_current();
     }
-    int retval = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
-    if(retval < 0)
-    {
-        close(fd);
-        return retval;
-    }
-    return fd;
-}
-
-int ef_wrap_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
-{
-    ef_routine_t *er = ef_routine_current();
     struct epoll_event evt = {0};
     evt.events = EPOLLOUT;
     evt.data.ptr = &er->poll_data;
     er->poll_data.type = POLL_TYPE_RDWRCON;
     er->poll_data.fd = sockfd;
-    int added = 0;
-    int retval = connect(sockfd, addr, addrlen);
+    int retval = 0;
+    int flags = fcntl(sockfd, F_GETFL);
+    if(!(flags & O_NONBLOCK))
+    {
+        retval = fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+        if(retval < 0)
+        {
+            goto exit_conn;
+        }
+    }
+    retval = connect(sockfd, addr, addrlen);
     if(retval < 0)
     {
         if(errno != EINPROGRESS)
         {
-            return retval;
+            goto exit_conn;
         }
         retval = epoll_ctl(er->poll_data.runtime_ptr->epfd, EPOLL_CTL_ADD, sockfd, &evt);
         if(retval < 0)
         {
-            return retval;
+            goto exit_conn;
         }
     }
     long events = ef_coroutine_yield(0);
@@ -238,12 +269,20 @@ int ef_wrap_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         retval = connect(sockfd, addr, addrlen);
     }
     epoll_ctl(er->poll_data.runtime_ptr->epfd, EPOLL_CTL_DEL, sockfd, &evt);
+exit_conn:
+    if(!(flags & O_NONBLOCK))
+    {
+        fcntl(sockfd, F_SETFL, flags);
+    }
     return retval;
 }
 
-ssize_t ef_wrap_read(int fd, void *buf, size_t count)
+ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
 {
-    ef_routine_t *er = ef_routine_current();
+    if(er == NULL)
+    {
+        er = ef_routine_current();
+    }
     struct epoll_event evt = {0};
     evt.events = EPOLLIN;
     evt.data.ptr = &er->poll_data;
@@ -267,9 +306,12 @@ ssize_t ef_wrap_read(int fd, void *buf, size_t count)
     return retval;
 }
 
-ssize_t ef_wrap_write(int fd, const void *buf, size_t count)
+ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count)
 {
-    ef_routine_t *er = ef_routine_current();
+    if(er == NULL)
+    {
+        er = ef_routine_current();
+    }
     struct epoll_event evt = {0};
     evt.events = EPOLLOUT;
     evt.data.ptr = &er->poll_data;
@@ -290,5 +332,63 @@ ssize_t ef_wrap_write(int fd, const void *buf, size_t count)
         retval = write(fd, buf, count);
     }
     epoll_ctl(er->poll_data.runtime_ptr->epfd, EPOLL_CTL_DEL, fd, &evt);
+    return retval;
+}
+
+ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int flags)
+{
+    if(er == NULL)
+    {
+        er = ef_routine_current();
+    }
+    struct epoll_event evt = {0};
+    evt.events = EPOLLIN;
+    evt.data.ptr = &er->poll_data;
+    er->poll_data.type = POLL_TYPE_RDWRCON;
+    er->poll_data.fd = sockfd;
+    int retval = epoll_ctl(er->poll_data.runtime_ptr->epfd, EPOLL_CTL_ADD, sockfd, &evt);
+    if(retval < 0)
+    {
+        return retval;
+    }
+    long events = ef_coroutine_yield(0);
+    if(events & EPOLLERR)
+    {
+        retval = -1;
+    }
+    else if(events & EPOLLIN)
+    {
+        retval = recv(sockfd, buf, len, flags);
+    }
+    epoll_ctl(er->poll_data.runtime_ptr->epfd, EPOLL_CTL_DEL, sockfd, &evt);
+    return retval;
+}
+
+ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t len, int flags)
+{
+    if(er == NULL)
+    {
+        er = ef_routine_current();
+    }
+    struct epoll_event evt = {0};
+    evt.events = EPOLLOUT;
+    evt.data.ptr = &er->poll_data;
+    er->poll_data.type = POLL_TYPE_RDWRCON;
+    er->poll_data.fd = sockfd;
+    int retval = epoll_ctl(er->poll_data.runtime_ptr->epfd, EPOLL_CTL_ADD, sockfd, &evt);
+    if(retval < 0)
+    {
+        return retval;
+    }
+    long events = ef_coroutine_yield(0);
+    if(events & (EPOLLERR | EPOLLHUP))
+    {
+        retval = -1;
+    }
+    else if(events & EPOLLOUT)
+    {
+        retval = send(sockfd, buf, len, flags);
+    }
+    epoll_ctl(er->poll_data.runtime_ptr->epfd, EPOLL_CTL_DEL, sockfd, &evt);
     return retval;
 }

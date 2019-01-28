@@ -46,7 +46,7 @@ inline void ef_init_fiber_sched(ef_fiber_sched_t *rt)
 
 inline void ef_init_fiber(ef_fiber_t *fiber, ef_fiber_proc_t fiber_proc, void *param)
 {
-    fiber->stack_ptr = ef_internal_init_fiber((char*)fiber + fiber->stack_size, fiber_proc, param);
+    fiber->stack_ptr = ef_internal_init_fiber((char*)fiber + fiber->stack_size, fiber_proc, (param != NULL) ? param : fiber);
     fiber->status = FIBER_STATUS_INITED;
 }
 
