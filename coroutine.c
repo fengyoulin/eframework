@@ -68,10 +68,10 @@ int ef_coroutine_pool_shrink(ef_coroutine_pool_t *pool, int idle_millisecs, int 
     struct timeval tv = {0};
     gettimeofday(&tv, NULL);
     dlist_entry_t *list_tail = list_entry_before(&pool->free_list);
-    while(pool->free_count && max_count--)
+    while(list_tail != &pool->free_list && max_count--)
     {
-        dlist_entry_t *next_tail = list_entry_before(list_tail);
         ef_coroutine_t *co = CAST_PARENT_PTR(list_tail, ef_coroutine_t, free_entry);
+        list_tail = list_entry_before(list_tail);
         if(((tv.tv_sec - co->last_run_time.tv_sec) * 1000 > idle_millisecs) ||
             (((tv.tv_sec - co->last_run_time.tv_sec) * 1000 == idle_millisecs) && tv.tv_usec - co->last_run_time.tv_usec >= idle_millisecs % 1000))
         {
@@ -82,7 +82,10 @@ int ef_coroutine_pool_shrink(ef_coroutine_pool_t *pool, int idle_millisecs, int 
             ++free_count;
             ef_delete_fiber(&co->fiber);
         }
-        list_tail = next_tail;
+        else
+        {
+            break;
+        }
     }
     return free_count;
 }

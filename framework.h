@@ -38,6 +38,8 @@ typedef struct _ef_listen_info_t {
 typedef struct _ef_runtime_t {
     int epfd;
     int stopping;
+    int shrink_millisecs;
+    int count_per_shrink;
     ef_coroutine_pool_t co_pool;
     dlist_entry_t listen_list;
     dlist_entry_t free_fd_list;
@@ -50,7 +52,7 @@ struct _ef_routine_t {
 
 #define ef_routine_current() ((ef_routine_t*)ef_coroutine_current())
 
-int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max);
+int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, int shrink_millisecs, int count_per_shrink);
 int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t ef_proc);
 int ef_run_loop(ef_runtime_t *rt);
 

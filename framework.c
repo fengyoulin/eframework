@@ -57,10 +57,12 @@ inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
     return -1;
 }
 
-int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max)
+int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, int shrink_millisecs, int count_per_shrink)
 {
     rt->epfd = epoll_create1(EPOLL_CLOEXEC);
     rt->stopping = 0;
+    rt->shrink_millisecs = shrink_millisecs;
+    rt->count_per_shrink = count_per_shrink;
     ef_coroutine_pool_init(&rt->co_pool, stack_size, limit_min, limit_max);
     list_init(&rt->listen_list);
     list_init(&rt->free_fd_list);
@@ -114,7 +116,7 @@ int ef_run_loop(ef_runtime_t *rt)
         {
             return retval;
         }
-        printf("all_count: %ld\nrun_count: %ld\n", rt->co_pool.full_count, rt->co_pool.full_count - rt->co_pool.free_count);
+        // printf("all_count: %ld\nrun_count: %ld\n", rt->co_pool.full_count, rt->co_pool.full_count - rt->co_pool.free_count);
         for(int i = 0; i < retval; ++i)
         {
             ef_epoll_data_t *ed = (ef_epoll_data_t*)evts[i].data.ptr;
@@ -221,6 +223,10 @@ exit_queue:
                 ef_coroutine_pool_shrink(&rt->co_pool, 0, -rt->co_pool.free_count);
             }
         }
+        if(rt->co_pool.free_count > 0 && rt->co_pool.full_count > rt->co_pool.limit_min)
+        {
+            ef_coroutine_pool_shrink(&rt->co_pool, rt->shrink_millisecs, rt->count_per_shrink);
+        }
     }
     return 0;
 }
@@ -284,7 +290,7 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
         er = ef_routine_current();
     }
     struct epoll_event evt = {0};
-    evt.events = EPOLLIN;
+    evt.events = EPOLLIN | EPOLLRDHUP;
     evt.data.ptr = &er->poll_data;
     er->poll_data.type = POLL_TYPE_RDWRCON;
     er->poll_data.fd = fd;
@@ -298,7 +304,7 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
     {
         retval = -1;
     }
-    else if(events & EPOLLIN)
+    else if(events & (EPOLLIN | EPOLLHUP | EPOLLRDHUP))
     {
         retval = read(fd, buf, count);
     }
@@ -342,7 +348,7 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
         er = ef_routine_current();
     }
     struct epoll_event evt = {0};
-    evt.events = EPOLLIN;
+    evt.events = EPOLLIN | EPOLLRDHUP;
     evt.data.ptr = &er->poll_data;
     er->poll_data.type = POLL_TYPE_RDWRCON;
     er->poll_data.fd = sockfd;
@@ -356,7 +362,7 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
     {
         retval = -1;
     }
-    else if(events & EPOLLIN)
+    else if(events & (EPOLLIN | EPOLLHUP | EPOLLRDHUP))
     {
         retval = recv(sockfd, buf, len, flags);
     }
