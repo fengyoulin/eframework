@@ -8,6 +8,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define POLL_TYPE_LISTEN 1
 #define POLL_TYPE_RDWRCON 2
 
@@ -72,5 +76,9 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
     ef_routine_recv(NULL, sockfd, buf, len, flags)
 #define ef_wrap_send(sockfd, buf, len, flags) \
     ef_routine_send(NULL, sockfd, buf, len, flags)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

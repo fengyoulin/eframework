@@ -58,7 +58,6 @@ long forward_proc(int fd, ef_routine_t *er)
         }
     }
 exit_proc:
-    shutdown(sockfd, SHUT_RDWR);
     close(sockfd);
     return ret;
 }
