@@ -22,7 +22,6 @@ long ef_proc(void *param)
     {
         retval = er->poll_data.ef_proc(fd, er);
     }
-    shutdown(fd, SHUT_RDWR);
     close(fd);
     return retval;
 }
@@ -93,7 +92,6 @@ int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t proc)
 
 int ef_run_loop(ef_runtime_t *rt)
 {
-    int retval;
     struct epoll_event evt = {0};
     evt.events = EPOLLIN;
     dlist_entry_t *lle = list_entry_after(&rt->listen_list);
@@ -101,7 +99,7 @@ int ef_run_loop(ef_runtime_t *rt)
     {
         ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
         evt.data.ptr = &li->poll_data;
-        retval = epoll_ctl(rt->epfd, EPOLL_CTL_ADD, li->poll_data.fd, &evt);
+        int retval = epoll_ctl(rt->epfd, EPOLL_CTL_ADD, li->poll_data.fd, &evt);
         if(retval < 0)
         {
             return retval;
@@ -111,22 +109,18 @@ int ef_run_loop(ef_runtime_t *rt)
     struct epoll_event evts[1024] = {0};
     while(1)
     {
-        retval = epoll_wait(rt->epfd, &evts[0], 1024, 1000);
-        if(retval < 0 && errno != EINTR)
+        int retcnt = epoll_wait(rt->epfd, &evts[0], 1024, 1000);
+        if(retcnt < 0 && errno != EINTR)
         {
-            return retval;
+            return retcnt;
         }
         // printf("all_count: %ld\nrun_count: %ld\n", rt->co_pool.full_count, rt->co_pool.full_count - rt->co_pool.free_count);
-        for(int i = 0; i < retval; ++i)
+        for(int i = 0; i < retcnt; ++i)
         {
             ef_epoll_data_t *ed = (ef_epoll_data_t*)evts[i].data.ptr;
-            if(ed->type == POLL_TYPE_RDWRCON)
+            if(ed->type == POLL_TYPE_LISTEN)
             {
-                ef_coroutine_resume(&rt->co_pool, &ed->routine_ptr->co, evts[i].events);
-            }
-            else if(ed->type == POLL_TYPE_LISTEN)
-            {
-                int retval = 0;
+                int runret = 0;
                 while(1)
                 {
                     int socket = accept(ed->fd, NULL, NULL);
@@ -135,11 +129,11 @@ int ef_run_loop(ef_runtime_t *rt)
                         break;
                     }
                     ef_listen_info_t *li = CAST_PARENT_PTR(ed, ef_listen_info_t, poll_data);
-                    if(retval >= 0)
+                    if(runret >= 0)
                     {
-                        retval = ef_routine_run(rt, li->ef_proc, socket);
+                        runret = ef_routine_run(rt, li->ef_proc, socket);
                     }
-                    if(retval < 0)
+                    if(runret < 0)
                     {
                         ef_queue_fd_t *qf = ef_alloc_fd(rt);
                         if(qf)
@@ -149,11 +143,14 @@ int ef_run_loop(ef_runtime_t *rt)
                         }
                         else
                         {
-                            shutdown(socket, SHUT_RDWR);
                             close(socket);
                         }
                     }
                 }
+            }
+            else if(ed->type == POLL_TYPE_RDWRCON)
+            {
+                ef_coroutine_resume(&rt->co_pool, &ed->routine_ptr->co, evts[i].events);
             }
         }
         lle = list_entry_after(&rt->listen_list);
@@ -165,8 +162,8 @@ int ef_run_loop(ef_runtime_t *rt)
             {
                 ef_queue_fd_t *qf = CAST_PARENT_PTR(fle, ef_queue_fd_t, list_entry);
                 fle = list_entry_after(fle);
-                int retval = ef_routine_run(rt, li->ef_proc, qf->fd);
-                if(retval < 0)
+                int runret = ef_routine_run(rt, li->ef_proc, qf->fd);
+                if(runret < 0)
                 {
                     goto exit_queue;
                 }
@@ -188,10 +185,9 @@ exit_queue:
                 {
                     ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
                     lle = list_entry_after(lle);
-                    if(li->poll_data.fd > 0)
+                    if(li->poll_data.fd >= 0)
                     {
                         epoll_ctl(rt->epfd, EPOLL_CTL_DEL, li->poll_data.fd, &evt);
-                        shutdown(li->poll_data.fd, SHUT_RDWR);
                         close(li->poll_data.fd);
                         li->poll_data.fd = -1;
                     }

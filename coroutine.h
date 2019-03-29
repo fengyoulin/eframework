@@ -6,6 +6,10 @@
 #include "fiber.h"
 #include "dlist.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ERROR_CO_EXITED ERROR_FIBER_EXITED
 #define ERROR_CO_NOT_INITED ERROR_FIBER_NOT_INITED
 
@@ -46,5 +50,9 @@ inline ef_coroutine_t *ef_coroutine_current(void)
     }
     return (ef_coroutine_t*)rt->current_fiber;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -4,6 +4,10 @@
 #include <limits.h>
 #include <sys/mman.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ERROR_FIBER_EXITED LONG_MIN
 #define ERROR_FIBER_NOT_INITED (LONG_MIN+1)
 
@@ -59,5 +63,9 @@ inline int ef_is_fiber_exited(ef_fiber_t *fiber)
 {
     return fiber->status == FIBER_STATUS_EXITED;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
