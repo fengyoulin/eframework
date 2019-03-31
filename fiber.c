@@ -23,6 +23,7 @@ ef_fiber_t *ef_create_fiber(size_t stack_size, ef_fiber_proc_t fiber_proc, void 
     }
     ef_fiber_t *fiber = (ef_fiber_t*)stack;
     fiber->stack_size = stack_size;
+    fiber->sched = ef_get_fiber_sched();
     ef_init_fiber(fiber, fiber_proc, param);
     return fiber;
 }

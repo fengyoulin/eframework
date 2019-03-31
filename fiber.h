@@ -16,9 +16,11 @@ extern "C" {
 
 typedef struct _ef_fiber_t {
     size_t stack_size;
+    size_t stack_mapped;
     void *stack_ptr;
-    struct _ef_fiber_t *parent;
     long status;
+    struct _ef_fiber_t *parent;
+    struct _ef_fiber_sched_t *sched;
 } ef_fiber_t;
 
 typedef struct _ef_fiber_sched_t {
@@ -41,7 +43,7 @@ ef_fiber_t *ef_create_fiber(size_t stack_size, ef_fiber_proc_t fiber_proc, void 
 long ef_resume_fiber(ef_fiber_t *_to, long retval);
 long ef_yield_fiber(long retval);
 
-void *ef_internal_init_fiber(void *stack_base, ef_fiber_proc_t proc, void *param);
+void *ef_internal_init_fiber(ef_fiber_t *fiber, ef_fiber_proc_t fiber_proc, void *param);
 
 inline void ef_init_fiber_sched(ef_fiber_sched_t *rt)
 {
@@ -50,8 +52,7 @@ inline void ef_init_fiber_sched(ef_fiber_sched_t *rt)
 
 inline void ef_init_fiber(ef_fiber_t *fiber, ef_fiber_proc_t fiber_proc, void *param)
 {
-    fiber->stack_ptr = ef_internal_init_fiber((char*)fiber + fiber->stack_size, fiber_proc, (param != NULL) ? param : fiber);
-    fiber->status = FIBER_STATUS_INITED;
+    fiber->stack_ptr = ef_internal_init_fiber(fiber, fiber_proc, (param != NULL) ? param : fiber);
 }
 
 inline void ef_delete_fiber(ef_fiber_t *fiber)
