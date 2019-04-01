@@ -8,10 +8,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define POLL_TYPE_LISTEN 1
 #define POLL_TYPE_RDWRCON 2
 
@@ -54,7 +50,9 @@ struct _ef_routine_t {
     ef_epoll_data_t poll_data;
 };
 
-#define ef_routine_current() ((ef_routine_t*)ef_coroutine_current())
+extern ef_runtime_t *_ef_runtime;
+
+#define ef_routine_current() ((ef_routine_t*)ef_coroutine_current(&_ef_runtime->co_pool))
 
 int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, int shrink_millisecs, int count_per_shrink);
 int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t ef_proc);
@@ -76,9 +74,5 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
     ef_routine_recv(NULL, sockfd, buf, len, flags)
 #define ef_wrap_send(sockfd, buf, len, flags) \
     ef_routine_send(NULL, sockfd, buf, len, flags)
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

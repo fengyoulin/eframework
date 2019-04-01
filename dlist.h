@@ -1,10 +1,6 @@
 #ifndef _DLIST_HEADER_
 #define _DLIST_HEADER_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct _dlist_entry_t {
     struct _dlist_entry_t *prev;
     struct _dlist_entry_t *next;
@@ -89,9 +85,5 @@ inline void list_remove(dlist_entry_t *entry)
     entry->next->prev = entry->prev;
     entry->prev->next = entry->next;
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

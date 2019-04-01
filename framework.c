@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+ef_runtime_t *_ef_runtime = NULL;
+
 inline ef_queue_fd_t *ef_alloc_fd(ef_runtime_t *rt) __attribute__((always_inline));
 inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket) __attribute__((always_inline));
 
@@ -42,7 +44,7 @@ inline ef_queue_fd_t *ef_alloc_fd(ef_runtime_t *rt)
 
 inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
 {
-    ef_routine_t *er = (ef_routine_t*)ef_coroutine_create(&rt->co_pool, ef_proc, NULL);
+    ef_routine_t *er = (ef_routine_t*)ef_coroutine_create(&rt->co_pool, sizeof(ef_routine_t), ef_proc, NULL);
     if(er)
     {
         er->poll_data.type = POLL_TYPE_RDWRCON;
@@ -58,6 +60,7 @@ inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
 
 int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, int shrink_millisecs, int count_per_shrink)
 {
+    _ef_runtime = rt;
     rt->epfd = epoll_create1(EPOLL_CLOEXEC);
     rt->stopping = 0;
     rt->shrink_millisecs = shrink_millisecs;
@@ -261,7 +264,7 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
             goto exit_conn;
         }
     }
-    long events = ef_coroutine_yield(0);
+    long events = ef_yield_fiber(er->co.fiber.sched, 0);
     if(events & (EPOLLERR | EPOLLHUP))
     {
         retval = -1;
@@ -295,7 +298,7 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
     {
         return retval;
     }
-    long events = ef_coroutine_yield(0);
+    long events = ef_yield_fiber(er->co.fiber.sched, 0);
     if(events & EPOLLERR)
     {
         retval = -1;
@@ -324,7 +327,7 @@ ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count
     {
         return retval;
     }
-    long events = ef_coroutine_yield(0);
+    long events = ef_yield_fiber(er->co.fiber.sched, 0);
     if(events & (EPOLLERR | EPOLLHUP))
     {
         retval = -1;
@@ -353,7 +356,7 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
     {
         return retval;
     }
-    long events = ef_coroutine_yield(0);
+    long events = ef_yield_fiber(er->co.fiber.sched, 0);
     if(events & EPOLLERR)
     {
         retval = -1;
@@ -382,7 +385,7 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
     {
         return retval;
     }
-    long events = ef_coroutine_yield(0);
+    long events = ef_yield_fiber(er->co.fiber.sched, 0);
     if(events & (EPOLLERR | EPOLLHUP))
     {
         retval = -1;

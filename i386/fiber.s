@@ -1,7 +1,11 @@
-.equ FIBER_STACKPTR_OFFSET, 8
-.equ FIBER_STATUS_OFFSET, 12
-.equ FIBER_PARENT_OFFSET, 16
-.equ FIBER_SCHED_OFFSET, 20
+.equ FIBER_STACK_UPPER_OFFSET, 8
+.equ FIBER_STACK_PTR_OFFSET, 16
+.equ FIBER_STATUS_OFFSET, 20
+.equ FIBER_PARENT_OFFSET, 24
+.equ FIBER_SCHED_OFFSET, 28
+
+.equ SCHED_CURRENT_FIBER_OFFSET, 0
+
 .equ FIBER_STATUS_EXITED, 0
 .equ FIBER_STATUS_INITED, 1
 
@@ -39,8 +43,8 @@ mov $FIBER_STATUS_EXITED,%ecx
 mov %ecx,FIBER_STATUS_OFFSET(%edx)
 mov FIBER_PARENT_OFFSET(%edx),%ecx
 mov FIBER_SCHED_OFFSET(%edx),%edx
-mov %ecx,(%edx)
-mov FIBER_STACKPTR_OFFSET(%ecx),%esp
+mov %ecx,SCHED_CURRENT_FIBER_OFFSET(%edx)
+mov FIBER_STACK_PTR_OFFSET(%ecx),%esp
 jmp _ef_fiber_restore
 
 ef_internal_init_fiber:
@@ -52,8 +56,7 @@ mov 8(%ebp),%edx
 mov $FIBER_STATUS_INITED,%eax
 mov %eax,FIBER_STATUS_OFFSET(%edx)
 mov %edx,%ecx
-mov (%edx),%eax
-add %eax,%edx
+mov FIBER_STACK_UPPER_OFFSET(%edx),%edx
 mov %ecx,-4(%edx)
 mov 16(%ebp),%eax
 mov %eax,-8(%edx)

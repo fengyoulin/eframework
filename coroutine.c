@@ -2,7 +2,7 @@
 
 void ef_coroutine_pool_init(ef_coroutine_pool_t *pool, size_t stack_size, int limit_min, int limit_max)
 {
-    ef_init_fiber_sched(&pool->fiber_sched);
+    ef_init_fiber_sched(&pool->fiber_sched, 1);
     pool->stack_size = stack_size;
     pool->limit_min = limit_min;
     pool->limit_max = limit_max;
@@ -12,7 +12,7 @@ void ef_coroutine_pool_init(ef_coroutine_pool_t *pool, size_t stack_size, int li
     pool->free_count = 0;
 }
 
-ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, ef_coroutine_proc_t fiber_proc, void *param)
+ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, size_t header_size, ef_coroutine_proc_t fiber_proc, void *param)
 {
     ef_coroutine_t *co = NULL;
     if(pool->free_count > 0)
@@ -26,7 +26,7 @@ ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, ef_coroutine_proc
     {
         return NULL;
     }
-    ef_fiber_t *fiber = ef_create_fiber(pool->stack_size, fiber_proc, param);
+    ef_fiber_t *fiber = ef_create_fiber(&pool->fiber_sched, pool->stack_size, header_size, fiber_proc, param);
     if(fiber == NULL)
     {
         return NULL;
@@ -39,7 +39,7 @@ ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, ef_coroutine_proc
 
 long ef_coroutine_resume(ef_coroutine_pool_t *pool, ef_coroutine_t *co, long to_yield)
 {
-    long retval = ef_resume_fiber(&co->fiber, to_yield);
+    long retval = ef_resume_fiber(&pool->fiber_sched, &co->fiber, to_yield);
     if(ef_is_fiber_exited(&co->fiber) && retval != ERROR_FIBER_EXITED)
     {
         gettimeofday(&co->last_run_time, NULL);
