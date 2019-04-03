@@ -6,11 +6,6 @@
 
 ef_runtime_t efr = {0};
 
-ef_fiber_sched_t *ef_get_fiber_sched(void)
-{
-    return &efr.co_pool.fiber_sched;
-}
-
 #define BUFFER_SIZE 8192
 
 // for performance test
