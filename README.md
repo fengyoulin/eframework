@@ -3,7 +3,7 @@
 ## What's the problem? ##
 Dealing with requests in an IO blocked way results in a long response delay time.What makes it worse is that the project is too hard to rewrite in an original way to achieve IO multiplexing like redis or nginx.
 
-![阻塞式IO](doc/blockIO.png)
+![Blocked IO](doc/blockIO.png)
 
 ## "Easy-event Framework" solution: ##
 
@@ -19,6 +19,6 @@ The eframework works in the following way:
  
  In this case, you can program in an original way to build your application except that you should remember to use the wrapped functions in eframework instead. Thus you can enjoy the performance brought by implementing IO multiplexing without caring about the event or coroutine management.
 
-![Yii2小部件渲染方式](doc/eframework.png)
+![Nonblocked IO](doc/eframework.png)
 
 
