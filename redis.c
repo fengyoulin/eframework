@@ -127,27 +127,29 @@ ef_redis_reply * ef_redis_get(ef_redis_connection *con,const char *key){
 
 ef_redis_reply* ef_redis_read_reply(ef_redis_connection *con){
     int r = ef_wrap_read(con->sockfd,con->buf,RES_BUFSIZE);
-    con->seek = 0;
     if (r < 0){
     	printf("read response fail:%d\n",r);
     	return NULL;
     }
+    con->end = r;
+    con->seek = 0;
+    
     char *start = con->buf + con->seek;
     switch(*(con->buf)){
     	case '-':{
-    		return parse_error(con->buf);
+    		return parse_error(con->buf,con);
     	}
     	case '+':{
-    		return parse_single_string(start,&con->seek);
+    		return parse_single_string(start,con);
     	}
     	case ':':{
-    		return parse_long(start,&con->seek);
+    		return parse_long(start,con);
     	}
     	case '*':{
-    		return parse_array(start,&con->seek);
+    		return parse_array(start,con);
     	}
     	case '$':{
-            return parse_bulk_string(start,&con->seek);
+            return parse_bulk_string(start,con);
     	}
     	default:
     	    printf("ef_redis_read_reply unsupported type:%c\n",*(con->buf));
@@ -155,44 +157,86 @@ ef_redis_reply* ef_redis_read_reply(ef_redis_connection *con){
     }   
 }
 
+int reply_read_more(ef_redis_connection *con){
+	size_t copylen = con->end - con->seek;
+	if(copylen > 0){
+        strncpy(con->buf,con->buf+con->seek,copylen);        
+	}
+	con->seek = 0;
+	con->end = copylen;
+    int r = ef_wrap_read(con->sockfd,con->buf+con->end,RES_BUFSIZE - con->end);
+    if (r < 0){
+    	printf("reply read more error:%d\n",r);
+    	return r;
+    }
+    con->end += r;
+    return 0;
+}
+
 // parse reply with prefix ':'
-ef_redis_reply* parse_long(char *buf,size_t *seek){
+ef_redis_reply* parse_long(char *buf,ef_redis_connection *con){
 	ef_redis_reply *rep = (ef_redis_reply *)malloc(sizeof(ef_redis_reply));
     if(rep == NULL){
     	return rep;
     }
     rep->type = REPLY_TYPE_LONG;
+    // check the completion
+    while(strstr(buf,"\r\n") == NULL){
+    	int res = reply_read_more(con);
+    	if(res < 0){
+    		free(rep);
+    		return NULL;
+    	}
+    	buf = con->buf;
+    }
 	long n = 0;
-	char * start = buf+1;
-	while(*start != '\r'){
-		n = n*10 + (*start)-'0';
-		start++;
+	char * start = buf;
+	buf++;
+	while(*buf != '\r'){
+		n = n*10 + (*buf)-'0';
+		buf++;
 	}
 	rep->reply.d = n;
-	*seek = *seek + (start-buf)+2;
+	con->seek = con->seek + (buf-start)+2;
     return rep;
 }
 
 // parse reply with prefix '+'
-ef_redis_reply* parse_single_string(char *buf,size_t *seek){
+ef_redis_reply* parse_single_string(char *buf,ef_redis_connection *con){
     buf += 1;
+    con->seek += 1;
     char *pos = strstr(buf,"\r\n");
-    *seek += 1;
-    return parse_string(buf,pos-buf,seek);
+    while(pos == NULL){
+    	int res = reply_read_more(con);
+    	if (res < 0){
+    		return NULL;
+    	}
+    	buf = con->buf;
+        pos = strstr(buf,"\r\n");
+    }
+    return parse_string(buf,pos-buf,con);
 }
 
 // parse reply with prefix '$'
-ef_redis_reply* parse_bulk_string(char *buf,size_t *seek){
-	char *start = buf;
+ef_redis_reply* parse_bulk_string(char *buf,ef_redis_connection *con){
+	char *pos = strstr(buf,"\r\n");
+    while(pos == NULL){
+    	int res = reply_read_more(con);
+    	if (res < 0){
+    		return NULL;
+    	}
+    	buf = con->buf;
+        pos = strstr(buf,"\r\n");
+    }
+    char *start = buf;
     int strlen = parse_len(buf);
-    char *pos = strstr(buf,"\r\n");
     buf = pos + 2;
-    *seek = *seek + (buf-start);
-    return parse_string(buf,strlen,seek);
+    con->seek = con->seek + (buf-start);
+    return parse_string(buf,strlen,con);
 }
 
 // parse string content with sufix "\r\n"
-ef_redis_reply* parse_string(char *buf,size_t strlen,size_t *seek){
+ef_redis_reply* parse_string(char *buf,size_t strlen,ef_redis_connection *con){
     ef_redis_reply *rep = (ef_redis_reply *)malloc(sizeof(ef_redis_reply));
     if(rep == NULL){
     	return rep;
@@ -213,26 +257,64 @@ ef_redis_reply* parse_string(char *buf,size_t strlen,size_t *seek){
         if(content == NULL){
     	    free(rep);
     	    return NULL;
-        }   
-        content = strncpy(content,buf,strlen);
+        }  
+
+        size_t read = 0;
+        if(con->end - con->seek < strlen){
+        	read = (con->end - con->seek);
+        	content = strncpy(content,buf,read);
+        	con->seek += read;
+        	while(read < strlen){
+        	    int res = reply_read_more(con);
+    	        if (res < 0){
+    		        return NULL;
+    	        }
+    	        buf = con->buf;
+                if(con->end - con->seek + read < strlen){
+                    strncpy(content+read,buf,con->end - con->seek);
+                    read += (con->end - con->seek);
+                    con->seek = con->end;
+                }else{
+                	strncpy(content+read,buf,strlen - read);
+                    break;
+                }
+            }
+        }else{
+        	content = strncpy(content,buf,strlen);
+        }
+
         str->buf = content;
         str->len = strlen;
         rep->reply.str = str;
-        *seek = *seek + strlen + 2;
+        con->seek = con->seek + strlen + 2;
     }
     
     return rep;
 }
 
 // parse reply with prefix '*'
-ef_redis_reply * parse_array(char *buf,size_t *seek){
-	char *start = buf;
-    ef_redis_reply *rep = (ef_redis_reply *)malloc(sizeof(ef_redis_reply));
+ef_redis_reply * parse_array(char *buf,ef_redis_connection *con){
+	ef_redis_reply *rep = (ef_redis_reply *)malloc(sizeof(ef_redis_reply));
     if(rep == NULL){
     	return rep;
     }
     rep->type = REPLY_TYPE_ARR;
+
+    char *pos,*start;
+    pos = strstr(buf,"\r\n");
+    while(pos == NULL){
+    	int res = reply_read_more(con);
+    	if(res < 0){
+    		free(rep);
+    		return NULL;
+    	}
+    	buf = con->buf;
+    }
+    start = buf;   
     int repnum = parse_len(buf);
+    buf = pos + 2;
+    con->seek = con->seek + (buf-start);
+
     rep->reply.arr = (reply_array*)malloc(sizeof(reply_array));
     if(rep->reply.arr == NULL){
     	printf("ef_redis_reply malloc error\n");
@@ -241,7 +323,6 @@ ef_redis_reply * parse_array(char *buf,size_t *seek){
     rep->reply.arr->num = repnum;
     if(repnum == -1){
     	rep->type = REPLY_TYPE_NULL;
-    	*seek = *seek + 5;
     	return rep;
     }
     rep->reply.arr->elem = (ef_redis_reply**)malloc(repnum*sizeof(ef_redis_reply*));
@@ -249,28 +330,20 @@ ef_redis_reply * parse_array(char *buf,size_t *seek){
     	printf("arr elem malloc error\n");
     	return NULL;
     }
-
-    int i,replen;
-    char *pos;
-    pos = strstr(buf,"\r\n");
-    if(pos-buf < 0){
-        printf("connection buffer is too small\n");
-    	return NULL;
-    }
-    buf = pos + 2;
-    *seek = *seek + (buf-start);
+    
+    int i;
     for(i=0;i<repnum;i++){
         switch(*buf){
         	case '$':{
-        		*(rep->reply.arr->elem + i) = parse_bulk_string(buf,seek);
+        		*(rep->reply.arr->elem + i) = parse_bulk_string(buf,con);
         		continue;
         	}
         	case ':':{
-                *(rep->reply.arr->elem + i) = parse_long(buf,seek);
+                *(rep->reply.arr->elem + i) = parse_long(buf,con);
         		continue;
         	}
         	case '*':{
-        		*(rep->reply.arr->elem + i) = parse_array(buf,seek);
+        		*(rep->reply.arr->elem + i) = parse_array(buf,con);
         		continue;
         	}
             default:{
@@ -284,20 +357,32 @@ ef_redis_reply * parse_array(char *buf,size_t *seek){
 }
 
 // parse reply with prefix '-'
-ef_redis_reply* parse_error(char *buf){   
+ef_redis_reply* parse_error(char *buf,ef_redis_connection *con){   
     ef_redis_reply *rep = (ef_redis_reply *)malloc(sizeof(ef_redis_reply));
     if(rep == NULL){
     	return rep;
     }
     rep->type = REPLY_TYPE_ERR;
+    
+    char *type,*errinfo,*start,*pos,*end;
+    end = strstr(buf,"\r\n");
+    while(end = NULL){
+    	int res = reply_read_more(con);
+    	if(res < 0){
+    		free(rep);
+    		return NULL;
+    	}
+    	buf = con->buf;
+    	end = strstr(buf,"\r\n");
+    }
+
     reply_error *err = (reply_error*)malloc(sizeof(reply_error));
     if(err == NULL){
         return NULL;
     }
-    char *type,*errinfo,*start,*pos;
     start = buf+1;
     pos = strstr(buf," ");
-    if (pos - start > 0){
+    if (pos != NULL){
         type = (char *)malloc(pos - start);
         if(type != NULL){
         	type = strncpy(type,start,pos-start);
@@ -308,16 +393,13 @@ ef_redis_reply* parse_error(char *buf){
         }
     }
     start = pos+1;
-    while(*(start) != ' '){
+    while(*(start) == ' '){
         start++;
     }
-    pos = strstr(start,"\r\n");
-    if(pos-start <  0){
-    	printf("redis buffer is too small.\n");
-    }
-    errinfo = (char *)malloc(pos-start);
-    errinfo = strncpy(errinfo,start,pos-start);
-    *(errinfo + (pos-start)) = '\0';
+    
+    errinfo = (char *)malloc(end-start);
+    errinfo = strncpy(errinfo,start,end-start);
+    *(errinfo + (end-start)) = '\0';
     err->type = type;
     err->err = errinfo;
     rep->reply.err = err;

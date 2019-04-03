@@ -23,6 +23,8 @@ typedef struct ef_redis_connection_t {
     size_t buflen;
     // redis reply parse seek
     size_t seek;
+    // redis reply buffer used
+    size_t end;
 } ef_redis_connection;
 
 typedef struct reply_string_t {
@@ -60,11 +62,12 @@ int free_reply_err(ef_redis_reply *rep);
 int ef_redis_cmd(ef_redis_connection * con,const char *fmt,...);
 ef_redis_reply * ef_redis_get(ef_redis_connection *con,const char *key);
 
+int reply_read_more(ef_redis_connection *con);
 ef_redis_reply* ef_redis_read_reply(ef_redis_connection *con);
-ef_redis_reply* parse_long(char *buf,size_t *seek);
-ef_redis_reply* parse_single_string(char *buf,size_t *seek);
-ef_redis_reply* parse_bulk_string(char *buf,size_t *seek);
-ef_redis_reply* parse_string(char *buf,size_t strlen,size_t *seek);
-ef_redis_reply * parse_array(char *buf,size_t *seek);
-ef_redis_reply* parse_error(char *buf);
+ef_redis_reply* parse_long(char *buf,ef_redis_connection *con);
+ef_redis_reply* parse_single_string(char *buf,ef_redis_connection *con);
+ef_redis_reply* parse_bulk_string(char *buf,ef_redis_connection *con);
+ef_redis_reply* parse_string(char *buf,size_t strlen,ef_redis_connection *con);
+ef_redis_reply * parse_array(char *buf,ef_redis_connection *con);
+ef_redis_reply* parse_error(char *buf,ef_redis_connection *con);
 int parse_len(char *res);
