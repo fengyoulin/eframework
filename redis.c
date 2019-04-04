@@ -127,6 +127,7 @@ ef_redis_reply * ef_redis_get(ef_redis_connection *con,const char *key){
 
 ef_redis_reply* ef_redis_read_reply(ef_redis_connection *con){
     int r = ef_wrap_read(con->sockfd,con->buf,RES_BUFSIZE);
+    printf("read from server:%d\n",r);
     if (r < 0){
     	printf("read response fail:%d\n",r);
     	return NULL;
@@ -135,9 +136,9 @@ ef_redis_reply* ef_redis_read_reply(ef_redis_connection *con){
     con->seek = 0;
     
     char *start = con->buf + con->seek;
-    switch(*(con->buf)){
+    switch(*(start)){
     	case '-':{
-    		return parse_error(con->buf,con);
+    		return parse_error(start,con);
     	}
     	case '+':{
     		return parse_single_string(start,con);
@@ -165,6 +166,7 @@ int reply_read_more(ef_redis_connection *con){
 	con->seek = 0;
 	con->end = copylen;
     int r = ef_wrap_read(con->sockfd,con->buf+con->end,RES_BUFSIZE - con->end);
+    printf("read from server:%d\n",r);
     if (r < 0){
     	printf("reply read more error:%d\n",r);
     	return r;
@@ -276,17 +278,18 @@ ef_redis_reply* parse_string(char *buf,size_t strlen,ef_redis_connection *con){
                     con->seek = con->end;
                 }else{
                 	strncpy(content+read,buf,strlen - read);
+                	con->seek = con->seek + (strlen-read);
                     break;
                 }
             }
         }else{
         	content = strncpy(content,buf,strlen);
+        	con->seek = con->seek + strlen + 2;
         }
-
+        
         str->buf = content;
         str->len = strlen;
         rep->reply.str = str;
-        con->seek = con->seek + strlen + 2;
     }
     
     return rep;
@@ -336,14 +339,17 @@ ef_redis_reply * parse_array(char *buf,ef_redis_connection *con){
         switch(*buf){
         	case '$':{
         		*(rep->reply.arr->elem + i) = parse_bulk_string(buf,con);
+        		buf = con->buf + con->seek;
         		continue;
         	}
         	case ':':{
                 *(rep->reply.arr->elem + i) = parse_long(buf,con);
+                buf = con->buf + con->seek;
         		continue;
         	}
         	case '*':{
         		*(rep->reply.arr->elem + i) = parse_array(buf,con);
+        		buf = con->buf + con->seek;
         		continue;
         	}
             default:{
@@ -366,7 +372,7 @@ ef_redis_reply* parse_error(char *buf,ef_redis_connection *con){
     
     char *type,*errinfo,*start,*pos,*end;
     end = strstr(buf,"\r\n");
-    while(end = NULL){
+    while(end == NULL){
     	int res = reply_read_more(con);
     	if(res < 0){
     		free(rep);

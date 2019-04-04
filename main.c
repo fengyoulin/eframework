@@ -3,10 +3,158 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include "framework.h"
+#include "redis.h"
 
 ef_runtime_t efr = {0};
 
 #define BUFFER_SIZE 8192
+char * int2str(int n){
+    if (n == 0){
+        return "0";
+    }
+    char * str;
+    int m=n,len=0;
+    while(m > 0){
+        len++;
+        m /= 10;
+    }
+    str = (char *)malloc(len+1);
+    if(str == NULL){
+        return "\0";
+    }
+    *(str+len) = '\0';
+    while(--len >= 0){
+        *(str+len) = '0'+(n % 10);
+        n /= 10;
+    }
+    return str;
+}
+
+long redis_proc(int fd,ef_routine_t *er){
+    ef_redis_connection *con = ef_redis_connect("127.0.0.1",6379);
+    if (con == NULL){
+        printf("connect error\n");
+        return -1;
+    }
+    int ret = 0;
+    // test PING
+    ret = ef_redis_cmd(con,"PING");
+    if (ret < 0){
+        printf("cmd PING error:%d",ret);
+        goto exit;
+    }
+    ef_redis_reply *rep = ef_redis_read_reply(con);
+    if (rep == NULL){
+        printf("read reply error\n");
+        ret = -1;
+        goto exit;
+    }
+    ret = ef_routine_write(er,fd,rep->reply.str->buf,rep->reply.str->len);
+    ef_redis_free_reply(rep);
+    if (ret < 0){
+        printf("write error:%d",ret);
+        goto exit;
+    }
+/*
+    // test parse string
+    rep = ef_redis_get(con,"a");
+    if(rep == NULL){
+        printf("ef_redis_get error\n");
+        ret = -1;
+        goto exit;
+    }
+    ret = ef_routine_write(er,fd,rep->reply.str->buf,rep->reply.str->len);
+    ef_redis_free_reply(rep);
+    if(ret < 0){
+        printf("write error:%d\n",ret);
+        goto exit;
+    }
+
+    // test parse integer
+    ret = ef_redis_cmd(con,"incr n");
+    if (ret < 0){
+        printf("cmd incr error:%d",ret);
+        goto exit;
+    }
+    rep = ef_redis_read_reply(con);
+    if(rep == NULL){
+        printf("reply incr error\n");
+        ret = -1;
+        goto exit;
+    }
+    char * val = int2str(rep->reply.d);
+    ef_redis_free_reply(rep);
+    ret = ef_routine_write(er,fd,val,strlen(val));
+    if(ret < 0){
+        printf("write error:%d,%d,%s\n",ret,rep->reply.d,val);
+        goto exit;
+    }
+
+    // test parse array
+    ret = ef_redis_cmd(con,"mget %s %s %s","a","n","abc");
+    if(ret < 0){
+        printf("mget error:%d\n",ret);
+        goto exit;
+    }
+    rep = ef_redis_read_reply(con);
+    if(rep == NULL){
+        printf("reply mget error\n");
+        ret = -1;
+        goto exit;
+    }
+    int i;
+    ef_redis_reply *subrep;
+    for(i=0;i<rep->reply.arr->num;++i){
+        subrep = *(rep->reply.arr->elem + i);
+        if(subrep->type & REPLY_TYPE_STR){
+            ret = ef_routine_write(er,fd,subrep->reply.str->buf,subrep->reply.str->len);
+            ef_redis_free_reply(subrep);
+            if(ret < 0){
+                printf("write subrep str error:%d\n",ret);
+                goto exit;
+            }
+        }
+        if(subrep->type & REPLY_TYPE_NULL){
+            ret = ef_routine_write(er,fd,"nil",3);
+            ef_redis_free_reply(subrep);
+            if(ret < 0){
+                printf("write subrep str error:%d\n",ret);
+                goto exit;
+            }
+        }
+    }
+    ef_redis_free_reply(rep);*/
+    
+    // test error
+    ret = ef_redis_cmd(con,"hmget %s","h");
+    if(ret < 0){
+        printf("cmd hmget error\n");
+        goto exit;
+    }
+    rep = ef_redis_read_reply(con);
+    if(rep == NULL){
+        printf("reply hmget err\n");
+        goto exit;
+    }
+    if(!(rep->type & REPLY_TYPE_ERR)){
+        printf("parse error error:%d\n",rep->type);
+        goto exit;
+    }
+    ret = ef_routine_write(er,fd,rep->reply.err->type,strlen(rep->reply.err->type));
+    if(ret < 0){
+        printf("write err type error\n");
+        goto exit;
+    }
+    ret = ef_routine_write(er,fd,rep->reply.err->err,strlen(rep->reply.err->err));
+    if(ret < 0){
+        printf("write err content error\n");
+        goto exit;
+    }
+exit:
+    ef_redis_free_reply(rep);
+    ef_redis_close(con);
+    return ret;
+}
 
 // for performance test
 // forward port 80 <=> 90, 8080 <=> 90
@@ -84,7 +232,7 @@ int main(int argc, char *argv[])
         return -1;
     }
     listen(sockfd, 512);
-    ef_add_listen(&efr, sockfd, forward_proc);
+    ef_add_listen(&efr, sockfd, redis_proc);
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0)
