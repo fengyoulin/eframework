@@ -35,10 +35,10 @@ void init_hash_data(size_t *data,size_t cap){
     return;
 }
 unsigned long hash(char *key){
-	unsigned long h = 1;
+	unsigned long h = 1234;
 	int c;
 	while(c = *key++){
-		h = (h<<5) + h + c;
+		h = h + c;
 	}
 	return h;
 }
@@ -77,7 +77,6 @@ int hash_set(hashtable *ht,char *key,char *val){
 	
     // key not exists
     if(ht->next == ht->cap - 1){
-    	//printf("prepare to resize:%d\n",ht->next);
 		int res = hash_resize(ht);
 		if(res < 0){
 			free(k);
@@ -106,7 +105,6 @@ int hash_set(hashtable *ht,char *key,char *val){
 		pb->key = k;
 		pb->val = bval;
 		pb->next = -1;
-		//printf("hash_set(%s)idx:%d,h:%d,next:%d\n",pb->key,*pidx,pb->h,pb->next);
 		return 0;
 	}
     pb = ht->arrData + ht->next;
@@ -117,7 +115,6 @@ int hash_set(hashtable *ht,char *key,char *val){
     pb->h = h;
     pb->key = k;
     pb->val = bval;
-	//printf("hash_set(%s)idx:%d,h:%d,next:%d\n",pb->key,*pidx,pb->h,pb->next);
     return 0;
 }
 
@@ -264,7 +261,6 @@ int hash_resize(hashtable *ht){
     	return 0;
     }
     size_t cap = ht->cap << 1;
-    //printf("new cap:%d\n",cap);
     size_t *data = (size_t *)malloc(sizeof(size_t)*cap + sizeof(bucket) * cap);
     if(data == NULL){
     	return -1;
