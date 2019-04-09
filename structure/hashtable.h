@@ -21,7 +21,7 @@ typedef struct block_val_t {
 } block_val;
 
 typedef struct block_t {
-    uint h;
+    unsigned long h;
     char *key;
     block_val *val;
     size_t next;
@@ -38,7 +38,7 @@ typedef struct hashtable_t {
 
 hashtable *new_hash_table(size_t cap);
 void init_hash_data(size_t *data,size_t cap);
-size_t hash(char *key);
+unsigned long hash(char *key);
 
 block_val *hash_get(hashtable *ht,char *key);
 int hash_set(hashtable *ht,char *key,char *val);

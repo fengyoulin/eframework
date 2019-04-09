@@ -34,8 +34,13 @@ void init_hash_data(size_t *data,size_t cap){
     }
     return;
 }
-size_t hash(char *key){
-	size_t h = strlen(key);
+unsigned long hash(char *key){
+	unsigned long h = 1;
+	int c;
+	while(c = *key++){
+		h = (h<<5) + h + c;
+	}
+	return h;
 }
 
 int hash_set(hashtable *ht,char *key,char *val){
@@ -88,7 +93,7 @@ int hash_set(hashtable *ht,char *key,char *val){
     bval->type = HASH_VAL_TYPE_STR;
     bval->v.str = v;
 
-	size_t h = hash(key);
+	unsigned long h = hash(key);
 	size_t offset = HASH_OFFSET(ht,h);
 	size_t *pidx = (size_t *)ht->arrData + offset;
 	block *pb;
@@ -120,7 +125,7 @@ block_val *hash_get(hashtable *ht,char *key){
 	if(ht == NULL){
 		return NULL;
 	}
-	uint h = hash(key);
+	unsigned long h = hash(key);
     size_t offset = HASH_OFFSET(ht,h);
     size_t index = *((size_t *)(ht->arrData) + offset);
     if(index == -1){
@@ -146,7 +151,7 @@ unsigned short hash_exists(hashtable *ht,char *key){
 	if(ht == NULL){
 		return 0;
 	}
-	uint h = hash(key);
+	unsigned long h = hash(key);
 	size_t offset = HASH_OFFSET(ht,h);
 	size_t index = *((size_t *)(ht->arrData) + offset);
     if(index == -1){
@@ -166,7 +171,7 @@ int hash_remove(hashtable *ht,char *key){
 	if(ht == NULL || !hash_exists(ht,key)){
 		return 0;
 	}
-	uint h = hash(key);
+	unsigned long h = hash(key);
 	size_t offset = HASH_OFFSET(ht,h);
 	size_t *pidx = (size_t*)ht->arrData + offset;
 	block *pb = ht->arrData + *pidx;
