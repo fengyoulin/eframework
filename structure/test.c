@@ -78,7 +78,7 @@ int test_set(hashtable *ht){
 }
 
 int test_get(hashtable *ht){
-    block_val * v = hash_get(ht,"a");
+    bucket_val * v = hash_get(ht,"a");
     if(v == NULL){
         return -1;
     }

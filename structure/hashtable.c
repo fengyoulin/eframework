@@ -6,7 +6,7 @@ hashtable *new_hash_table(size_t cap){
 	if(ht == NULL){
 		return NULL;
 	}
-	size_t *data = (size_t *)malloc(sizeof(size_t) * cap + sizeof(block) * cap);
+	size_t *data = (size_t *)malloc(sizeof(size_t) * cap + sizeof(bucket) * cap);
 	if(data == NULL){
 		free(ht);
 		return NULL;
@@ -16,7 +16,7 @@ hashtable *new_hash_table(size_t cap){
     ht->used = 0;
     ht->next = 0;
     ht->sizemask = HASH_SIZEMASK(ht);
-    ht->arrData = (block *)(data + cap);
+    ht->arrData = (bucket *)(data + cap);
     return ht;
 }
 
@@ -25,7 +25,7 @@ void init_hash_data(size_t *data,size_t cap){
 	for(i = 0;i<cap;++i){
 		*(data+i) = -1;
 	}
-	block *arrData = (block *)(data+cap);
+	bucket *arrData = (bucket *)(data+cap);
     for(i=0;i<cap;++i){
     	(arrData + i)->h = -1;
     	(arrData + i)->key = NULL;
@@ -57,7 +57,7 @@ int hash_set(hashtable *ht,char *key,char *val){
 	}
 
 	// key already exists
-	block_val *bval = hash_get(ht,key);
+	bucket_val *bval = hash_get(ht,key);
 
 	if(bval != NULL){
 		free(bval->v.str);
@@ -86,7 +86,7 @@ int hash_set(hashtable *ht,char *key,char *val){
 		}
 	}
 
-	bval = (block_val*)malloc(sizeof(block_val));
+	bval = (bucket_val*)malloc(sizeof(bucket_val));
     if(bval == NULL){
     	return -1;
     }
@@ -96,7 +96,7 @@ int hash_set(hashtable *ht,char *key,char *val){
 	unsigned long h = hash(key);
 	size_t offset = HASH_OFFSET(ht,h);
 	size_t *pidx = (size_t *)ht->arrData + offset;
-	block *pb;
+	bucket *pb;
 	if(*pidx == -1){	
 		*pidx = ht->next;
 		ht->next++;
@@ -121,7 +121,7 @@ int hash_set(hashtable *ht,char *key,char *val){
     return 0;
 }
 
-block_val *hash_get(hashtable *ht,char *key){
+bucket_val *hash_get(hashtable *ht,char *key){
 	if(ht == NULL){
 		return NULL;
 	}
@@ -131,7 +131,7 @@ block_val *hash_get(hashtable *ht,char *key){
     if(index == -1){
     	return NULL;
     }
-    block *pb = ht->arrData+index;
+    bucket *pb = ht->arrData+index;
     
     while(pb->h != -1){
     	if(strcmp(pb->key,key) == 0){
@@ -157,7 +157,7 @@ unsigned short hash_exists(hashtable *ht,char *key){
     if(index == -1){
     	return 0;
     }
-    block *pb = ht->arrData+index;
+    bucket *pb = ht->arrData+index;
     while(pb){
     	if(strcmp(pb->key,key) == 0){
     		return 1;
@@ -174,8 +174,8 @@ int hash_remove(hashtable *ht,char *key){
 	unsigned long h = hash(key);
 	size_t offset = HASH_OFFSET(ht,h);
 	size_t *pidx = (size_t*)ht->arrData + offset;
-	block *pb = ht->arrData + *pidx;
-	block *preb = NULL;
+	bucket *pb = ht->arrData + *pidx;
+	bucket *preb = NULL;
 	while(pb){
 		if(strcmp(pb->key,key) == 0){
 			break;
@@ -192,12 +192,12 @@ int hash_remove(hashtable *ht,char *key){
 	}else{
 		*pidx = pb->next;
 	}
-	hash_free_block(pb,'1');
+	hash_free_bucket(pb,'1');
 	ht->used--;
 	return 0;
 }
 
-void hash_free_block(block *pb,char freeval){
+void hash_free_bucket(bucket *pb,char freeval){
 	if(pb == NULL){
 		return;
 	}
@@ -205,14 +205,14 @@ void hash_free_block(block *pb,char freeval){
 	pb->key = NULL;
 	if(freeval == '1'){
 		free(pb->key);
-		hash_free_block_val(pb->val);
+		hash_free_bucket_val(pb->val);
 	}
 	pb->val = NULL;
 	pb->next = -1;
 	return;
 }
 
-void hash_free_block_val(block_val *pval){
+void hash_free_bucket_val(bucket_val *pval){
 	if(pval == NULL){
 		return;
 	}
@@ -226,7 +226,7 @@ void hash_free_block_val(block_val *pval){
 	        hash_free(pval->v.arr);
             break;
         default:
-            printf("unknown block value type.\n");
+            printf("unknown bucket value type.\n");
             break;
 	}
 	free(pval);
@@ -236,7 +236,7 @@ void hash_free_block_val(block_val *pval){
 void hash_free(hashtable *ht){
 	int idx;
 	for(idx=0;idx < ht->next;++idx){
-		hash_free_block(ht->arrData+idx,'1');
+		hash_free_bucket(ht->arrData+idx,'1');
 	}
 	free(HASH_DATA_START(ht));
 	free(ht);
@@ -265,22 +265,22 @@ int hash_resize(hashtable *ht){
     }
     size_t cap = ht->cap << 1;
     //printf("new cap:%d\n",cap);
-    size_t *data = (size_t *)malloc(sizeof(size_t)*cap + sizeof(block) * cap);
+    size_t *data = (size_t *)malloc(sizeof(size_t)*cap + sizeof(bucket) * cap);
     if(data == NULL){
     	return -1;
     }
     size_t *origdata = HASH_DATA_START(ht);
     init_hash_data(data,cap);
-    hash_copy_block((block *)(data+cap),ht->arrData,ht->next);
+    hash_copy_bucket((bucket *)(data+cap),ht->arrData,ht->next);
     ht->cap = cap;
     ht->sizemask = HASH_SIZEMASK(ht);
-    ht->arrData = (block *)(data+cap);
+    ht->arrData = (bucket *)(data+cap);
     hash_rehash(ht);
     free(origdata);
     return 0;
 }
 
-void hash_copy_block(block* dest,block* src,size_t count){
+void hash_copy_bucket(bucket* dest,bucket* src,size_t count){
 	if(count <= 0){
 		return;
 	}
@@ -296,11 +296,11 @@ void hash_copy_block(block* dest,block* src,size_t count){
 
 void hash_rehash(hashtable *ht){
     int idx,idxused;
-    block *pb,*pbused;
+    bucket *pb,*pbused;
     for(idx = 0; idx < ht->next; ++idx){
     	pb = ht->arrData+idx;
     	if(pb->h == -1){
-    		// find next used block to fill the hole
+    		// find next used bucket to fill the hole
     		pbused = NULL;
     		idxused = idx+1;
             while(idxused < ht->next){
@@ -315,7 +315,7 @@ void hash_rehash(hashtable *ht){
             	break;
             }
             *pb = *pbused;
-            hash_free_block(pbused,'0');
+            hash_free_bucket(pbused,'0');
     	}
     	size_t offset = HASH_OFFSET(ht,pb->h);
     	size_t * pidx = (size_t*)ht->arrData + offset;
