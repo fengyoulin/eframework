@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "hashtable.h"
+#include "strtab.h"
 
 void test_int()
 {
@@ -73,14 +74,9 @@ void test_int()
     hash_free(ht);
 }
 
-void str_dtor(void *ptr)
-{
-    ef_string_free((ef_string_t *)ptr, 1);
-}
-
 void test_str()
 {
-    hashtable_t *ht = new_hash_table(0, str_dtor);
+    strtab_t *ht = strtab_new(0);
 
     char key[5] = {0};
     for (int idx = 0; idx < 1000; ++idx) {
@@ -88,7 +84,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!hash_set_key_value(ht, key, 4, ef_string_new(key, 4))) {
+        if (!strtab_set(ht, key, 4, key, 4)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -98,9 +94,9 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        bucket_t *pb = hash_find_key(ht, key, 4);
-        if (pb) {
-            printf("%s: %s\n", pb->key->str, pb->val.str->str);
+        ef_string_t *str = strtab_find(ht, key, 4);
+        if (str) {
+            printf("%d: %s\n", idx, str->str);
         }
     }
     printf("cap: %d, used: %d\n", ht->cap, ht->used);
@@ -109,7 +105,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (hash_remove_key(ht, key, 4) != 0) {
+        if (strtab_remove(ht, key, 4) != 0) {
             printf("remove failed: %d\n", idx);
             break;
         }
@@ -120,7 +116,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!hash_set_key_value(ht, key, 4, ef_string_new(key, 4))) {
+        if (!strtab_set(ht, key, 4, key, 4)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -131,7 +127,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!hash_set_key_value(ht, key, 4, ef_string_new(key, 4))) {
+        if (!strtab_set(ht, key, 4, key, 4)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -142,12 +138,12 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        bucket_t *pb = hash_find_key(ht, key, 4);
-        if (pb) {
-            printf("%s: %s\n", pb->key->str, pb->val.str->str);
+        ef_string_t *str = strtab_find(ht, key, 4);
+        if (str) {
+            printf("%d: %s\n", idx, str->str);
         }
     }
-    hash_free(ht);
+    strtab_free(ht);
 }
 
 int main(int argc, char *argv[])

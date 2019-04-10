@@ -1,3 +1,6 @@
+#ifndef _HASHTABLE_HEADER_
+#define _HASHTABLE_HEADER_
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -6,9 +9,9 @@
 //HashTable
 #define HASH_TABLE_INIT_CAP (8)
 
-#define HASH_DATA_START(ht) ((uint32_t*)ht->arrData - ht->cap)
 #define HASH_SIZEMASK(ht) (-(ht->cap))
 #define HASH_OFFSET(ht,h) ((int32_t)((uint32_t)h | ht->sizemask))
+#define HASH_ENTRY(ht,off) (((uint32_t *)ht->arrData)[off])
 
 typedef void (*val_dtor_t)(void *ptr);
 
@@ -59,3 +62,4 @@ int hash_resize(hashtable_t *ht, uint32_t cap);
 
 void hash_free(hashtable_t *ht);
 
+#endif

@@ -158,8 +158,8 @@ alloc_bucket:
     pb->val.ptr = val;
 
     int32_t offset = HASH_OFFSET(ht, pb->h);
-    pb->next = ((uint32_t *)ht->arrData)[offset];
-    ((uint32_t *)ht->arrData)[offset] = pb - ht->arrData;
+    pb->next = HASH_ENTRY(ht, offset);
+    HASH_ENTRY(ht, offset) = pb - ht->arrData;
 
     return pb;
 }
@@ -172,7 +172,7 @@ bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len)
 
     unsigned long h = hash_func(key, len);
     int32_t offset = HASH_OFFSET(ht, h);
-    uint32_t index = ((uint32_t *)ht->arrData)[offset];
+    uint32_t index = HASH_ENTRY(ht, offset);
     if (index == -1) {
         return NULL;
     }
@@ -200,7 +200,7 @@ int hash_remove_key(hashtable_t *ht, const char *key, size_t len)
 
     unsigned long h = hash_func(key, len);
     int32_t offset = HASH_OFFSET(ht, h);
-    uint32_t *pidx = &((uint32_t *)ht->arrData)[offset];
+    uint32_t *pidx = &HASH_ENTRY(ht, offset);
     if (*pidx == -1) {
         return 0;
     }
@@ -268,8 +268,8 @@ int hash_resize(hashtable_t *ht, uint32_t cap)
         memcpy(&newptr->val, &pb->val, sizeof(bucket_value_t));
 
         int32_t offset = HASH_OFFSET(ht, newptr->h);
-        newptr->next = ((uint32_t *)newbks)[offset];
-        ((uint32_t *)newbks)[offset] = newptr - newbks;
+        newptr->next = HASH_ENTRY(ht, offset);
+        HASH_ENTRY(ht, offset) = newptr - newbks;
 
         ++newptr;
     }
