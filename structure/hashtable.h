@@ -1,55 +1,61 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "string.h"
+
 //HashTable
 #define HASH_TABLE_INIT_CAP (8)
-#define HASH_VAL_TYPE_STR (1<<1)
-#define HASH_VAL_TYPE_LONG (1<<2)
-#define HASH_VAL_TYPE_ARR (1<<3)
 
-#define HASH_DATA_START(ht) ((size_t*)ht->arrData - ht->cap)
+#define HASH_DATA_START(ht) ((uint32_t*)ht->arrData - ht->cap)
 #define HASH_SIZEMASK(ht) (-(ht->cap))
-#define HASH_OFFSET(ht,h) (h | ht->sizemask)
+#define HASH_OFFSET(ht,h) ((int32_t)((uint32_t)h | ht->sizemask))
 
-typedef struct block_val_t {
-    short type;
-    union {
-    	long d;
-    	char *str;
-    	struct hashtable_t *arr;
-    } v;
-} block_val;
+typedef void (*val_dtor_t)(void *ptr);
 
-typedef struct block_t {
+typedef union _bucket_value bucket_value_t;
+typedef struct _bucket bucket_t;
+typedef struct _hashtable hashtable_t;
+
+union _bucket_value {
+    long lval;
+    double dval;
+    void *ptr;
+    char *sz;
+    ef_string_t *str;
+    hashtable_t *arr;
+};
+
+struct _bucket {
     unsigned long h;
-    char *key;
-    block_val *val;
-    size_t next;
-} block;
+    ef_string_t *key;
+    bucket_value_t val;
+    uint32_t next;
+};
 
-typedef struct hashtable_t {
-    size_t cap;
-    size_t sizemask;
-    size_t used;
-    size_t next;
-    block *arrData;
-} hashtable;
+struct _hashtable {
+    uint32_t cap;
+    uint32_t sizemask;
+    uint32_t used;
+    uint32_t next;
+    uint32_t removed;
+    val_dtor_t val_dtor;
+    bucket_t *arrData;
+};
 
+hashtable_t *new_hash_table(uint32_t cap, val_dtor_t val_dtor);
 
-hashtable *new_hash_table(size_t cap);
-void init_hash_data(size_t *data,size_t cap);
-unsigned long hash(char *key);
+bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len);
 
-block_val *hash_get(hashtable *ht,char *key);
-int hash_set(hashtable *ht,char *key,char *val);
-unsigned short hash_exists(hashtable *ht,char *key);
-int hash_remove(hashtable *ht,char *key);
+bucket_t *hash_set_key_value(hashtable_t *ht, const char *key, size_t klen, void *val);
 
-int hash_resize(hashtable *ht);
-void hash_rehash(hashtable *ht);
-size_t hash_recap(size_t cap);
-void hash_copy_block(block* dest,block* src,size_t count);
+inline int hash_exists(hashtable_t *ht, const char *key, size_t len)
+{
+    return hash_find_key(ht, key, len) != NULL;
+}
 
-void hash_free_block(block *pb,char freeval);
-void hash_free_block_val(block_val *pval);
-void hash_free(hashtable *ht);
+int hash_remove_key(hashtable_t *ht, const char *key, size_t len);
+
+int hash_resize(hashtable_t *ht, uint32_t cap);
+
+void hash_free(hashtable_t *ht);
+
