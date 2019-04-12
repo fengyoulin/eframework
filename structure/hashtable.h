@@ -1,7 +1,7 @@
 #ifndef _HASHTABLE_HEADER_
 #define _HASHTABLE_HEADER_
 
-#include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include "string.h"

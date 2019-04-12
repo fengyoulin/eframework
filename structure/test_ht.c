@@ -12,7 +12,7 @@ void test_int()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!hash_set_key_value(ht, key, 4, (void *)idx)) {
+        if (!hash_set_key_value(ht, key, 4, (void *)(long)idx)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -44,7 +44,7 @@ void test_int()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!hash_set_key_value(ht, key, 4, (void *)idx)) {
+        if (!hash_set_key_value(ht, key, 4, (void *)(long)idx)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -55,7 +55,7 @@ void test_int()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!hash_set_key_value(ht, key, 4, (void *)idx)) {
+        if (!hash_set_key_value(ht, key, 4, (void *)(long)idx)) {
             printf("set failed: %d\n", idx);
             break;
         }
