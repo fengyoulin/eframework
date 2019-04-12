@@ -73,9 +73,6 @@ static uint32_t hash_recap(uint32_t cap)
 
 static void hash_free_bucket(hashtable_t *ht, bucket_t *pb)
 {
-    if (!pb) {
-        return;
-    }
     if (!pb->h && !pb->key) {
         return;
     }
@@ -121,13 +118,9 @@ hashtable_t *new_hash_table(uint32_t cap, val_dtor_t val_dtor)
 
 bucket_t *hash_set_key_value(hashtable_t *ht, const char *key, size_t klen, void *val)
 {
-    if (!ht) {
-        return NULL;
-    }
-
     bucket_t *pb = hash_find_key(ht, key, klen);
     if (pb) {
-        if (ht->val_dtor) {
+        if (ht->val_dtor && pb->val.ptr) {
             ht->val_dtor(pb->val.ptr);
         }
         pb->val.ptr = val;
@@ -166,10 +159,6 @@ alloc_bucket:
 
 bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len)
 {
-    if (!ht || !key) {
-        return NULL;
-    }
-
     unsigned long h = hash_func(key, len);
     int32_t offset = HASH_OFFSET(ht, h);
     uint32_t index = HASH_ENTRY(ht, offset);
@@ -194,10 +183,6 @@ bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len)
 
 int hash_remove_key(hashtable_t *ht, const char *key, size_t len)
 {
-    if (!ht) {
-        return 0;
-    }
-
     unsigned long h = hash_func(key, len);
     int32_t offset = HASH_OFFSET(ht, h);
     uint32_t *pidx = &HASH_ENTRY(ht, offset);
@@ -234,10 +219,6 @@ void hash_free(hashtable_t *ht)
 
 int hash_resize(hashtable_t *ht, uint32_t cap)
 {
-    if (!ht) {
-        return -1;
-    }
-
     cap = hash_recap(cap);
     if (cap < ht->used) {
         return -1;
