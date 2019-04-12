@@ -6,16 +6,22 @@
 
 #define DEFAULT_PORT 6379
 #define DEFAULT_HOST "127.0.0.1"
-#define RES_BUFSIZE 1024
+#define RES_BUFSIZE  1024
 
-#define REPLY_TYPE_ERR (1<<0)
-#define REPLY_TYPE_STR (1<<1)
+#define REPLY_TYPE_ERR  (1<<0)
+#define REPLY_TYPE_STR  (1<<1)
 #define REPLY_TYPE_LONG (1<<2)
-#define REPLY_TYPE_ARR (1<<3)
+#define REPLY_TYPE_ARR  (1<<3)
 #define REPLY_TYPE_NULL (1<<4)
 
-typedef struct ef_redis_connection_t {
-	int port;
+typedef struct _ef_redis_connection ef_redis_connection_t;
+typedef struct _ef_redis_reply ef_redis_reply_t;
+typedef struct _reply_string reply_string_t;
+typedef struct _reply_error reply_error_t;
+typedef struct _reply_array reply_array_t;
+
+struct _ef_redis_connection {
+    int port;
     char* host;
     int sockfd;
     // redis reply buffer
@@ -25,49 +31,41 @@ typedef struct ef_redis_connection_t {
     size_t seek;
     // redis reply buffer used
     size_t end;
-} ef_redis_connection;
+};
 
-typedef struct reply_string_t {
-	char *buf;
-	int len;
-} reply_string;
-typedef struct reply_error_t {
-	char *type;
- 	char *err;
-} reply_error;
-typedef struct reply_array_t {
-	size_t num;
-	struct ef_redis_reply_t **elem;
-} reply_array;
-
-typedef struct ef_redis_reply_t {
+struct _ef_redis_reply {
     uint type;
     union {
-    	reply_string *str;
-    	long d;
-    	reply_array *arr;
-    	reply_error *err;
+        long d;
+        reply_string_t *str;
+        reply_array_t *arr;
+        reply_error_t *err;
     } reply;
-} ef_redis_reply;
+};
 
-ef_redis_connection * ef_redis_connect(char *host,int port);
-int ef_redis_close(ef_redis_connection *con);
+struct _reply_string {
+    char *buf;
+    int len;
+};
 
-int ef_redis_free_reply(ef_redis_reply *rep);
-int free_reply_long(ef_redis_reply *rep);
-int free_reply_str(ef_redis_reply *rep);
-int free_reply_arr(ef_redis_reply *rep);
-int free_reply_err(ef_redis_reply *rep);
+struct _reply_error {
+    char *type;
+    char *err;
+};
 
-int ef_redis_cmd(ef_redis_connection * con,const char *fmt,...);
-ef_redis_reply * ef_redis_get(ef_redis_connection *con,const char *key);
+struct _reply_array {
+    size_t num;
+    ef_redis_reply_t **elem;
+};
 
-int reply_read_more(ef_redis_connection *con);
-ef_redis_reply* ef_redis_read_reply(ef_redis_connection *con);
-ef_redis_reply* parse_long(char *buf,ef_redis_connection *con);
-ef_redis_reply* parse_single_string(char *buf,ef_redis_connection *con);
-ef_redis_reply* parse_bulk_string(char *buf,ef_redis_connection *con);
-ef_redis_reply* parse_string(char *buf,size_t strlen,ef_redis_connection *con);
-ef_redis_reply * parse_array(char *buf,ef_redis_connection *con);
-ef_redis_reply* parse_error(char *buf,ef_redis_connection *con);
-int parse_len(char *res);
+ef_redis_connection_t * ef_redis_connect(char *host, int port);
+
+int ef_redis_close(ef_redis_connection_t *con);
+
+int ef_redis_free_reply(ef_redis_reply_t *rep);
+
+int ef_redis_cmd(ef_redis_connection_t * con, const char *fmt, ...);
+
+ef_redis_reply_t * ef_redis_read_reply(ef_redis_connection_t *con);
+
+ef_redis_reply_t * ef_redis_get(ef_redis_connection_t *con, const char *key);

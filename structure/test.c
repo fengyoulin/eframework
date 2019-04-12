@@ -1,32 +1,32 @@
 #include "hashtable.h"
-#include "strtab.h"
+#include "stringtab.h"
 #include <stdio.h>
 
 int test_recap()
 {
-	hashtable_t *ht = new_hash_table(15, NULL);
-	if (ht->cap != 16) {
-		printf("16 != ht->cap=%d\n", ht->cap);
-		return -1;
-	}
+    hashtable_t *ht = new_hash_table(15, NULL);
+    if (ht->cap != 16) {
+        printf("16 != ht->cap=%d\n", ht->cap);
+        return -1;
+    }
     hash_free(ht);
     ht = new_hash_table(0, NULL);
     if (ht->cap != HASH_TABLE_INIT_CAP) {
-    	printf("%d != ht->cap=%d\n", HASH_TABLE_INIT_CAP, ht->cap);
-    	return -1;
+        printf("%d != ht->cap=%d\n", HASH_TABLE_INIT_CAP, ht->cap);
+        return -1;
     }
     hash_free(ht);
     ht = new_hash_table(32, NULL);
     if (ht->cap != 32) {
-    	printf("32 != ht->cap=%d\n", ht->cap);
-    	return -1;
+        printf("32 != ht->cap=%d\n", ht->cap);
+        return -1;
     }
     
     hash_free(ht);
     ht = new_hash_table(33, NULL);
     if (ht->cap != 64) {
-    	printf("64 != ht->cap=%d\n", ht->cap);
-    	return -1;
+        printf("64 != ht->cap=%d\n", ht->cap);
+        return -1;
     }
     hash_free(ht);
 
@@ -200,7 +200,7 @@ void test_int()
 
 void test_str()
 {
-    strtab_t *ht = strtab_new(0);
+    stringtab_t *ht = stringtab_new(0);
 
     char key[5] = {0};
     for (int idx = 0; idx < 1000; ++idx) {
@@ -208,7 +208,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!strtab_set(ht, key, 4, key, 4)) {
+        if (!stringtab_set(ht, key, 4, key, 4)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -218,7 +218,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        ef_string_t *str = strtab_find(ht, key, 4);
+        ef_string_t *str = stringtab_find(ht, key, 4);
         if (str) {
             printf("%d: %s\n", idx, str->str);
         }
@@ -229,7 +229,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (strtab_remove(ht, key, 4) != 0) {
+        if (stringtab_remove(ht, key, 4) != 0) {
             printf("remove failed: %d\n", idx);
             break;
         }
@@ -240,7 +240,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!strtab_set(ht, key, 4, key, 4)) {
+        if (!stringtab_set(ht, key, 4, key, 4)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -251,7 +251,7 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        if (!strtab_set(ht, key, 4, key, 4)) {
+        if (!stringtab_set(ht, key, 4, key, 4)) {
             printf("set failed: %d\n", idx);
             break;
         }
@@ -262,16 +262,16 @@ void test_str()
         key[2] = '0' + (idx / 10) % 10;
         key[1] = '0' + (idx / 100) % 10;
         key[0] = '0' + idx / 1000;
-        ef_string_t *str = strtab_find(ht, key, 4);
+        ef_string_t *str = stringtab_find(ht, key, 4);
         if (str) {
             printf("%d: %s\n", idx, str->str);
         }
     }
-    strtab_free(ht);
+    stringtab_free(ht);
 }
 
 int main(int argc,char* argv[])
-{	
+{    
     int res;
     res = test_recap();
     if (res == 0) {
