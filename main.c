@@ -4,30 +4,45 @@
 #include <netinet/tcp.h>
 #include "framework.h"
 #include "redis.h"
+#include "basic/basic.h"
+#include "http.h"
 
 ef_runtime_t efr = {0};
 
 #define BUFFER_SIZE 8192
-char * int2str(int n){
-    if (n == 0){
-        return "0";
+
+long get_proc(int fd,ef_routine_t *er){
+    printf("request comes~");
+    int ret,w,send,port;
+    char buffer[BUFFER_SIZE];
+    char *host = "127.0.0.1";
+    port = 8081;
+    char *request_uri = "/test";
+    ef_curl *cu = ef_curl_init(host,port,request_uri);
+    if(!cu){
+       return -1;
     }
-    char * str;
-    int m=n,len=0;
-    while(m > 0){
-        len++;
-        m /= 10;
+    ret = ef_curl_exec(cu);
+    printf("ret=%d\n",ret);
+    if(ret < 0){
+        goto exit;
     }
-    str = (char *)malloc(len+1);
-    if(str == NULL){
-        return "\0";
+    ret = ef_curl_read_response(cu,buffer,BUFFER_SIZE);
+    while(ret > 0){
+        send = 0;
+        while(send < ret){
+            w = ef_routine_write(er,fd,buffer,ret);
+            if(w < 0){
+                ret = w;
+                goto exit;
+            }
+            send += w;
+        }
+        ret = ef_curl_read_response(cu,buffer,BUFFER_SIZE);
     }
-    *(str+len) = '\0';
-    while(--len >= 0){
-        *(str+len) = '0'+(n % 10);
-        n /= 10;
-    }
-    return str;
+exit:
+    ef_curl_close(cu);
+    return ret;
 }
 
 long redis_proc(int fd,ef_routine_t *er){
@@ -212,7 +227,7 @@ void signal_handler(int num)
 
 int main(int argc, char *argv[])
 {
-    ef_init(&efr, 4096 * 4, 256, 1024, 1000 * 30, 16);
+    ef_init(&efr, 4096 * 8, 256, 1024, 1000 * 30, 16);
 
     struct sigaction sa = {0};
     sa.sa_handler = signal_handler;
@@ -232,7 +247,7 @@ int main(int argc, char *argv[])
         return -1;
     }
     listen(sockfd, 512);
-    ef_add_listen(&efr, sockfd, redis_proc);
+    ef_add_listen(&efr, sockfd, get_proc);
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0)
