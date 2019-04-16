@@ -1,7 +1,7 @@
 all: prog_i386
 
-prog_i386: main.c framework.c coroutine.c fiber.c i386/fiber.o
-	gcc -std=gnu99 -m32 -o prog_i386 main.c framework.c coroutine.c fiber.c i386/fiber.o
+prog_i386: main.c framework.c coroutine.c fiber.c redis.c i386/fiber.o
+	gcc -std=gnu99 -m32 -o prog_i386 main.c framework.c coroutine.c fiber.c redis.c i386/fiber.o
 
 i386/fiber.o: i386/fiber.s
 	as --32 -o i386/fiber.o i386/fiber.s

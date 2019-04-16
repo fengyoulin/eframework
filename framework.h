@@ -11,31 +11,35 @@
 #define POLL_TYPE_LISTEN 1
 #define POLL_TYPE_RDWRCON 2
 
-typedef struct _ef_routine_t ef_routine_t;
+typedef struct _ef_routine ef_routine_t;
+typedef struct _ef_runtime ef_runtime_t;
+typedef struct _ef_queue_fd ef_queue_fd_t;
+typedef struct _ef_epoll_data ef_epoll_data_t;
+typedef struct _ef_listen_info ef_listen_info_t;
 
 typedef long (*ef_routine_proc_t)(int fd, ef_routine_t *er);
 
-typedef struct _ef_epoll_data_t {
+struct _ef_epoll_data {
     int type;
     int fd;
-    struct _ef_routine_t *routine_ptr;
-    struct _ef_runtime_t *runtime_ptr;
+    ef_routine_t *routine_ptr;
+    ef_runtime_t *runtime_ptr;
     ef_routine_proc_t ef_proc;
-} ef_epoll_data_t;
+};
 
-typedef struct _ef_queue_fd_t {
+struct _ef_queue_fd {
     int fd;
     dlist_entry_t list_entry;
-} ef_queue_fd_t;
+};
 
-typedef struct _ef_listen_info_t {
+struct _ef_listen_info {
     ef_epoll_data_t poll_data;
     ef_routine_proc_t ef_proc;
     dlist_entry_t list_entry;
     dlist_entry_t fd_list;
-} ef_listen_info_t;
+};
 
-typedef struct _ef_runtime_t {
+struct _ef_runtime {
     int epfd;
     int stopping;
     int shrink_millisecs;
@@ -43,9 +47,9 @@ typedef struct _ef_runtime_t {
     ef_coroutine_pool_t co_pool;
     dlist_entry_t listen_list;
     dlist_entry_t free_fd_list;
-} ef_runtime_t;
+};
 
-struct _ef_routine_t {
+struct _ef_routine {
     ef_coroutine_t co;
     ef_epoll_data_t poll_data;
 };

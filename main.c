@@ -45,29 +45,30 @@ exit:
     return ret;
 }
 
-long redis_proc(int fd,ef_routine_t *er){
-    ef_redis_connection *con = ef_redis_connect("127.0.0.1",6379);
-    if (con == NULL){
+long redis_proc(int fd,ef_routine_t *er)
+{
+    ef_redis_connection_t *con = ef_redis_connect("127.0.0.1", 6379);
+    if (con == NULL) {
         printf("connect error\n");
         return -1;
     }
     int ret = 0;
     // test PING
-    ret = ef_redis_cmd(con,"PING");
-    if (ret < 0){
-        printf("cmd PING error:%d",ret);
+    ret = ef_redis_cmd(con, "PING");
+    if (ret < 0) {
+        printf("cmd PING error:%d", ret);
         goto exit;
     }
-    ef_redis_reply *rep = ef_redis_read_reply(con);
-    if (rep == NULL){
+    ef_redis_reply_t *rep = ef_redis_read_reply(con);
+    if (rep == NULL) {
         printf("read reply error\n");
         ret = -1;
         goto exit;
     }
-    ret = ef_routine_write(er,fd,rep->reply.str->buf,rep->reply.str->len);
+    ret = ef_routine_write(er, fd, rep->reply.str->buf, rep->reply.str->len);
     ef_redis_free_reply(rep);
-    if (ret < 0){
-        printf("write error:%d",ret);
+    if (ret < 0) {
+        printf("write error:%d", ret);
         goto exit;
     }
 /*
@@ -118,7 +119,7 @@ long redis_proc(int fd,ef_routine_t *er){
         goto exit;
     }
     int i;
-    ef_redis_reply *subrep;
+    ef_redis_reply_t *subrep;
     for(i=0;i<rep->reply.arr->num;++i){
         subrep = *(rep->reply.arr->elem + i);
         if(subrep->type & REPLY_TYPE_STR){
@@ -141,27 +142,27 @@ long redis_proc(int fd,ef_routine_t *er){
     ef_redis_free_reply(rep);*/
     
     // test error
-    ret = ef_redis_cmd(con,"hmget %s","h");
-    if(ret < 0){
+    ret = ef_redis_cmd(con, "hmget %s", "h");
+    if (ret < 0) {
         printf("cmd hmget error\n");
         goto exit;
     }
     rep = ef_redis_read_reply(con);
-    if(rep == NULL){
+    if (rep == NULL) {
         printf("reply hmget err\n");
         goto exit;
     }
-    if(!(rep->type & REPLY_TYPE_ERR)){
-        printf("parse error error:%d\n",rep->type);
+    if (!(rep->type & REPLY_TYPE_ERR)) {
+        printf("parse error error:%d\n", rep->type);
         goto exit;
     }
-    ret = ef_routine_write(er,fd,rep->reply.err->type,strlen(rep->reply.err->type));
-    if(ret < 0){
+    ret = ef_routine_write(er, fd, rep->reply.err->type, strlen(rep->reply.err->type));
+    if (ret < 0) {
         printf("write err type error\n");
         goto exit;
     }
-    ret = ef_routine_write(er,fd,rep->reply.err->err,strlen(rep->reply.err->err));
-    if(ret < 0){
+    ret = ef_routine_write(er, fd, rep->reply.err->err, strlen(rep->reply.err->err));
+    if (ret < 0) {
         printf("write err content error\n");
         goto exit;
     }
@@ -227,7 +228,7 @@ void signal_handler(int num)
 
 int main(int argc, char *argv[])
 {
-    ef_init(&efr, 4096 * 8, 256, 1024, 1000 * 30, 16);
+    ef_init(&efr, 1024 * 1024, 256, 1024, 1000 * 30, 16);
 
     struct sigaction sa = {0};
     sa.sa_handler = signal_handler;

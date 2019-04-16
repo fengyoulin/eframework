@@ -51,6 +51,8 @@ bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len);
 
 bucket_t *hash_set_key_value(hashtable_t *ht, const char *key, size_t klen, void *val);
 
+inline int hash_exists(hashtable_t *ht, const char *key, size_t len) __attribute__((always_inline));
+
 inline int hash_exists(hashtable_t *ht, const char *key, size_t len)
 {
     return hash_find_key(ht, key, len) != NULL;
