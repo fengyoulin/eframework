@@ -3,7 +3,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "basic/basic.h"
-#include "structure/strtab.h"
+#include "structure/stringtab.h"
 
 #define MAX_RESP_BUFSIZE 4096
 #define MAX_HEADER_BUFSIZE 1024
@@ -28,9 +28,9 @@ typedef struct ef_curl_request_t {
     unsigned short status;
     const char *protocol;
     char *request_uri;
-    strtab_t *headers;
-    strtab_t *cookies;
-    strtab_t *request_body;
+    stringtab_t *headers;
+    stringtab_t *cookies;
+    stringtab_t *request_body;
 } ef_curl_request;
 
 typedef struct ef_curl_response_t {
@@ -41,7 +41,7 @@ typedef struct ef_curl_response_t {
     char *bufend;
     char *bufsend;
     long chunk_remain;
-    strtab_t *headers;
+    stringtab_t *headers;
     char buf[MAX_RESP_BUFSIZE];
 } ef_curl_response;
 

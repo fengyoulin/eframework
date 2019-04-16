@@ -30,7 +30,7 @@ ef_curl *ef_curl_init(char *host,int port,char *request_uri){
 	resp->bufsend = resp->buf;
 	resp->bufend = resp->buf;
 	resp->chunk_remain = 0;
-	resp->headers = strtab_new(0);
+	resp->headers = stringtab_new(0);
 
 	cu = (ef_curl *)malloc(sizeof(ef_curl));
 	if(cu == NULL){
@@ -73,12 +73,12 @@ int ef_curl_set_header(ef_curl *cu,char *header,char *content){
 	}
 	
 	if(cu->req->headers == NULL){
-		cu->req->headers = strtab_new(0);
+		cu->req->headers = stringtab_new(0);
         if(!cu->req->headers){
         	return -1;
         }
 	}
-	if(!strtab_set(cu->req->headers,header,strlen(header),content,strlen(content))){
+	if(!stringtab_set(cu->req->headers,header,strlen(header),content,strlen(content))){
         return -1;
     }
     return 0;
@@ -90,12 +90,12 @@ int ef_curl_set_request_body(ef_curl *cu,char *key,char *val){
 	}
 	
 	if(cu->req->request_body == NULL){
-		cu->req->request_body = strtab_new(0);
+		cu->req->request_body = stringtab_new(0);
         if(cu->req->request_body == NULL){
         	return -1;
         }
 	}
-	if(!strtab_set(cu->req->request_body,key,strlen(key),val,strlen(val))){
+	if(!stringtab_set(cu->req->request_body,key,strlen(key),val,strlen(val))){
         return -1;
     }
     return 0;
@@ -186,7 +186,7 @@ int http_build_request_header(ef_curl_request *req,char *buf,size_t cap){
     ef_string_t *k,*v;
 	int res;
 	k = req->headers->arrData->key;
-    v = strtab_find(req->headers,k->str,k->len);
+    v = stringtab_find(req->headers,k->str,k->len);
 	if(cap < k->len+v->len+3){
 		return -1;
 	}
@@ -197,7 +197,7 @@ int http_build_request_header(ef_curl_request *req,char *buf,size_t cap){
 	pos += v->len;
 	strcat(pos,"\r\n");
 	pos += 2;
-    res = strtab_remove(req->headers,k->str,k->len);
+    res = stringtab_remove(req->headers,k->str,k->len);
     if(res < 0){
     	printf("hash_remove fail:%s\n",k);
     	return res;
@@ -250,7 +250,7 @@ int ef_curl_read_response(ef_curl *cu,char *buf,size_t len){
 	printf("prepare to read response\n");
     int r,chunked = 0,buflen,sendlen=0;
     char *headerName = "transfer-encoding";
-    ef_string_t *v = strtab_find(cu->resp->headers,headerName,strlen(headerName));
+    ef_string_t *v = stringtab_find(cu->resp->headers,headerName,strlen(headerName));
     strtolower(v->str,v->len);
     if(v && strcmp(v->str,"chunked") == 0){
     	printf("chunked response\n");
@@ -370,7 +370,7 @@ int http_buffer_resp_body(int fd,ef_curl_response *resp){
     // content-length
     int r;
     char *headerName = "content-length";
-    ef_string_t *v = strtab_find(resp->headers,headerName,strlen(headerName));
+    ef_string_t *v = stringtab_find(resp->headers,headerName,strlen(headerName));
     if(v){
         resp->content_length = str2int(v->str,v->len);
     }
@@ -466,7 +466,7 @@ int http_parse_resp_header(ef_curl_response *resp,char *start,char *bufend){
         }
         *end = '\0';
         strtolower(header,strlen(header));
-        res = strtab_set(resp->headers,header,pos-header,val,end-val);
+        res = stringtab_set(resp->headers,header,pos-header,val,end-val);
         printf("set resp header:%s:%s %d\n",header,val,end - val);
         if(!res){
         	printf("hash_set fail %s:%s\n",header,val);
