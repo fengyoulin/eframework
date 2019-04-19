@@ -21,8 +21,11 @@ ef_string_t *stringtab_find(stringtab_t *tb, const char *key, size_t len)
 
 ef_string_t *stringtab_set(stringtab_t *tb, const char *key, size_t klen, const char *val, size_t vlen)
 {
-    ef_string_t *str = ef_string_new(val, vlen);
-    if (!str) {
+    ef_string_t *str = NULL;
+    if (val) {
+        str = ef_string_new(val, vlen);
+    }
+    if (!str && val) {
         return NULL;
     }
     bucket_t *pb = hash_set_key_value(tb, key, klen, str);

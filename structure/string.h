@@ -16,36 +16,40 @@ inline void ef_string_free(ef_string_t *str, int destroy) __attribute__((always_
 inline ef_string_t *ef_string_new(const char *sz, size_t len)
 {
     ef_string_t *str = (ef_string_t *)malloc(sizeof(ef_string_t));
-    if(!str) {
+    if (!str) {
         return NULL;
     }
-    if (!len) {
+    if (len == 0) {
         len = sz ? strlen(sz) : 0;
     }
-    str->str = len ? (char *)malloc(len + 1) : NULL;
-    if(str->str) {
-        memcpy(str->str, sz, len);
-        str->str[len] = 0;
+    str->str = (char *)malloc(len + 1);
+    if (!str->str) {
+        free(str);
+        return NULL;
     }
+    if (len) {
+        memcpy(str->str, sz, len);
+    }
+    str->str[len] = 0;
     str->len = len;
     return str;
 }
 
 inline int ef_string_append(ef_string_t *str, const char *sz, size_t len)
 {
-    if(len <= 0) {
+    char *ptr = NULL;
+    if (len == 0) {
         len = sz ? strlen(sz) : 0;
     }
-    if(!len) {
+    if (len == 0) {
         return 0;
     }
-    char *ptr = NULL;
-    if(str->str) {
+    if (str->str) {
         ptr = (char *)realloc(str->str, str->len + len + 1);
     } else {
         ptr = (char *)malloc(len + 1);
     }
-    if(!ptr) {
+    if (!ptr) {
         return -1;
     }
     memcpy(ptr + str->len, sz, len);
@@ -57,11 +61,8 @@ inline int ef_string_append(ef_string_t *str, const char *sz, size_t len)
 
 inline void ef_string_free(ef_string_t *str, int destroy)
 {
-    if(!str) {
-        return;
-    }
     free(str->str);
-    if(destroy) {
+    if (destroy) {
         free(str);
     } else {
         str->str = NULL;

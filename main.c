@@ -6,6 +6,7 @@
 #include "redis.h"
 #include "basic/basic.h"
 #include "http.h"
+#include "fastcgi.h"
 
 ef_runtime_t efr = {0};
 
@@ -221,6 +222,42 @@ exit_proc:
     return ret;
 }
 
+long fcgi_proc(int fd, ef_routine_t *er)
+{
+    while (1) {
+        fcgi_request_t *req = fcgi_read_request(fd);
+        if (!req) {
+            printf("fcgi_read_request return NULL\n");
+            break;
+        }
+        if (req->params) {
+            for (uint32_t idx = 0; idx < req->params->used; ++idx) {
+                bucket_t *pb = &req->params->arrData[idx];
+                printf("%s: %s\n", pb->key->str, pb->val.str ? pb->val.str->str: "");
+            }
+        }
+        fcgi_response_t *resp = fcgi_new_response(req);
+        if (resp) {
+            headertab_set(resp->headers, "Content-Length", 14, "1048576", 7);
+            ef_buffer_expand(resp->data, 1048576);
+            for(int idx = 0; idx < 1048576; idx += 64) {
+                memcpy(resp->data->ptr + idx, "Hello, FastCGI!\nHello, FastCGI!\nHello, FastCGI!\nHello, FastCGI!\n", 64);
+            }
+            resp->data->len = 1048576;
+            fcgi_write_response(fd, resp, 0);
+            fcgi_free_response(resp, 0);
+        }
+        int keep = (req->flags & FCGI_KEEP_CONN);
+        fcgi_free_request(req);
+        if (!keep) {
+            break;
+        }
+    }
+    close(fd);
+    printf("Finished.\n");
+    return 0;
+}
+
 void signal_handler(int num)
 {
     efr.stopping = 1;
@@ -263,6 +300,20 @@ int main(int argc, char *argv[])
     }
     listen(sockfd, 512);
     ef_add_listen(&efr, sockfd, forward_proc);
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(sockfd < 0)
+    {
+        return -1;
+    }
+    addr_in.sin_port = htons(9000);
+    retval = bind(sockfd, (const struct sockaddr *)&addr_in, sizeof(addr_in));
+    if(retval < 0)
+    {
+        return -1;
+    }
+    listen(sockfd, 512);
+    ef_add_listen(&efr, sockfd, fcgi_proc);
 
     return ef_run_loop(&efr);
 }
