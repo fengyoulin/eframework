@@ -2,7 +2,7 @@
 #define _EFRAMEWORK_HEADER_
 
 #include "coroutine.h"
-#include "dlist.h"
+#include "structure/list.h"
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <sys/types.h>
@@ -29,14 +29,14 @@ struct _ef_epoll_data {
 
 struct _ef_queue_fd {
     int fd;
-    dlist_entry_t list_entry;
+    ef_list_entry_t list_entry;
 };
 
 struct _ef_listen_info {
     ef_epoll_data_t poll_data;
     ef_routine_proc_t ef_proc;
-    dlist_entry_t list_entry;
-    dlist_entry_t fd_list;
+    ef_list_entry_t list_entry;
+    ef_list_entry_t fd_list;
 };
 
 struct _ef_runtime {
@@ -45,8 +45,8 @@ struct _ef_runtime {
     int shrink_millisecs;
     int count_per_shrink;
     ef_coroutine_pool_t co_pool;
-    dlist_entry_t listen_list;
-    dlist_entry_t free_fd_list;
+    ef_list_entry_t listen_list;
+    ef_list_entry_t free_fd_list;
 };
 
 struct _ef_routine {

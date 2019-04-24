@@ -1,6 +1,6 @@
 #include "framework.h"
 #include "coroutine.h"
-#include "dlist.h"
+#include "structure/list.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,9 +31,9 @@ long ef_proc(void *param)
 inline ef_queue_fd_t *ef_alloc_fd(ef_runtime_t *rt)
 {
     ef_queue_fd_t *qf = NULL;
-    if(!list_empty(&rt->free_fd_list))
+    if(!ef_list_empty(&rt->free_fd_list))
     {
-        qf = CAST_PARENT_PTR(list_remove_after(&rt->free_fd_list), ef_queue_fd_t, list_entry);
+        qf = CAST_PARENT_PTR(ef_list_remove_after(&rt->free_fd_list), ef_queue_fd_t, list_entry);
     }
     else
     {
@@ -66,8 +66,8 @@ int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, i
     rt->shrink_millisecs = shrink_millisecs;
     rt->count_per_shrink = count_per_shrink;
     ef_coroutine_pool_init(&rt->co_pool, stack_size, limit_min, limit_max);
-    list_init(&rt->listen_list);
-    list_init(&rt->free_fd_list);
+    ef_list_init(&rt->listen_list);
+    ef_list_init(&rt->free_fd_list);
     return rt->epfd < 0 ? -1 : 0;
 }
 
@@ -88,8 +88,8 @@ int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t proc)
     li->poll_data.routine_ptr = NULL;
     li->poll_data.runtime_ptr = rt;
     li->ef_proc = proc;
-    list_init(&li->fd_list);
-    list_insert_after(&rt->listen_list, &li->list_entry);
+    ef_list_init(&li->fd_list);
+    ef_list_insert_after(&rt->listen_list, &li->list_entry);
     return 0;
 }
 
@@ -97,7 +97,7 @@ int ef_run_loop(ef_runtime_t *rt)
 {
     struct epoll_event evt = {0};
     evt.events = EPOLLIN;
-    dlist_entry_t *lle = list_entry_after(&rt->listen_list);
+    ef_list_entry_t *lle = ef_list_entry_after(&rt->listen_list);
     while(lle != &rt->listen_list)
     {
         ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
@@ -107,7 +107,7 @@ int ef_run_loop(ef_runtime_t *rt)
         {
             return retval;
         }
-        lle = list_entry_after(lle);
+        lle = ef_list_entry_after(lle);
     }
     struct epoll_event evts[1024] = {0};
     while(1)
@@ -142,7 +142,7 @@ int ef_run_loop(ef_runtime_t *rt)
                         if(qf)
                         {
                             qf->fd = socket;
-                            list_insert_before(&li->fd_list, &qf->list_entry);
+                            ef_list_insert_before(&li->fd_list, &qf->list_entry);
                         }
                         else
                         {
@@ -156,15 +156,15 @@ int ef_run_loop(ef_runtime_t *rt)
                 ef_coroutine_resume(&rt->co_pool, &ed->routine_ptr->co, evts[i].events);
             }
         }
-        lle = list_entry_after(&rt->listen_list);
+        lle = ef_list_entry_after(&rt->listen_list);
         while(lle != &rt->listen_list)
         {
             ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
-            dlist_entry_t *fle = list_entry_after(&li->fd_list);
+            ef_list_entry_t *fle = ef_list_entry_after(&li->fd_list);
             while(fle != &li->fd_list)
             {
                 ef_queue_fd_t *qf = CAST_PARENT_PTR(fle, ef_queue_fd_t, list_entry);
-                fle = list_entry_after(fle);
+                fle = ef_list_entry_after(fle);
                 int runret = ef_routine_run(rt, li->ef_proc, qf->fd);
                 if(runret < 0)
                 {
@@ -172,42 +172,42 @@ int ef_run_loop(ef_runtime_t *rt)
                 }
                 else
                 {
-                    list_remove(&qf->list_entry);
-                    list_insert_after(&rt->free_fd_list, &qf->list_entry);
+                    ef_list_remove(&qf->list_entry);
+                    ef_list_insert_after(&rt->free_fd_list, &qf->list_entry);
                 }
             }
-            lle = list_entry_after(lle);
+            lle = ef_list_entry_after(lle);
         }
 exit_queue:
         if(rt->stopping)
         {
-            if(!list_empty(&rt->listen_list))
+            if(!ef_list_empty(&rt->listen_list))
             {
-                lle = list_entry_after(&rt->listen_list);
+                lle = ef_list_entry_after(&rt->listen_list);
                 while(lle != &rt->listen_list)
                 {
                     ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
-                    lle = list_entry_after(lle);
+                    lle = ef_list_entry_after(lle);
                     if(li->poll_data.fd >= 0)
                     {
                         epoll_ctl(rt->epfd, EPOLL_CTL_DEL, li->poll_data.fd, &evt);
                         close(li->poll_data.fd);
                         li->poll_data.fd = -1;
                     }
-                    if(list_empty(&li->fd_list))
+                    if(ef_list_empty(&li->fd_list))
                     {
-                        list_remove(&li->list_entry);
+                        ef_list_remove(&li->list_entry);
                         free(li);
                     }
                 }
             }
-            if(!list_empty(&rt->free_fd_list))
+            if(!ef_list_empty(&rt->free_fd_list))
             {
-                dlist_entry_t *ffle = list_remove_after(&rt->free_fd_list);
+                ef_list_entry_t *ffle = ef_list_remove_after(&rt->free_fd_list);
                 while(ffle != NULL)
                 {
                     ef_queue_fd_t *qf = CAST_PARENT_PTR(ffle, ef_queue_fd_t, list_entry);
-                    ffle = list_remove_after(&rt->free_fd_list);
+                    ffle = ef_list_remove_after(&rt->free_fd_list);
                     free(qf);
                 }
             }
