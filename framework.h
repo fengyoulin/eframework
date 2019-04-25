@@ -24,9 +24,38 @@
 #include "coroutine.h"
 #include "structure/list.h"
 #include <stdlib.h>
-#include <sys/epoll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+
+typedef struct _ef_event ef_event_t;
+typedef struct _ef_poll ef_poll_t;
+
+typedef ef_poll_t *(*create_func_t)(int count);
+
+typedef int (*associate_func_t)(ef_poll_t *p, int fd, int events, void *ptr);
+typedef int (*dissociate_func_t)(ef_poll_t *p, int fd);
+typedef int (*wait_func_t)(ef_poll_t *p, ef_event_t *evts, int count, int timeout);
+typedef int (*free_func_t)(ef_poll_t *p);
+
+struct _ef_event {
+    int events;
+    void *ptr;
+};
+
+struct _ef_poll {
+    associate_func_t associate;
+    dissociate_func_t dissociate;
+    wait_func_t wait;
+    free_func_t free;
+};
+
+/*
+ * the macros are equal in poll and epoll
+ */
+#define EF_POLLIN 0x001
+#define EF_POLLOUT 0x004
+#define EF_POLLERR 0x008
+#define EF_POLLHUP 0x010
 
 #define POLL_TYPE_LISTEN 1
 #define POLL_TYPE_RDWRCON 2
@@ -34,12 +63,12 @@
 typedef struct _ef_routine ef_routine_t;
 typedef struct _ef_runtime ef_runtime_t;
 typedef struct _ef_queue_fd ef_queue_fd_t;
-typedef struct _ef_epoll_data ef_epoll_data_t;
+typedef struct _ef_poll_data ef_poll_data_t;
 typedef struct _ef_listen_info ef_listen_info_t;
 
 typedef long (*ef_routine_proc_t)(int fd, ef_routine_t *er);
 
-struct _ef_epoll_data {
+struct _ef_poll_data {
     int type;
     int fd;
     ef_routine_t *routine_ptr;
@@ -53,14 +82,14 @@ struct _ef_queue_fd {
 };
 
 struct _ef_listen_info {
-    ef_epoll_data_t poll_data;
+    ef_poll_data_t poll_data;
     ef_routine_proc_t ef_proc;
     ef_list_entry_t list_entry;
     ef_list_entry_t fd_list;
 };
 
 struct _ef_runtime {
-    int epfd;
+    ef_poll_t *p;
     int stopping;
     int shrink_millisecs;
     int count_per_shrink;
@@ -71,7 +100,7 @@ struct _ef_runtime {
 
 struct _ef_routine {
     ef_coroutine_t co;
-    ef_epoll_data_t poll_data;
+    ef_poll_data_t poll_data;
 };
 
 extern ef_runtime_t *_ef_runtime;
