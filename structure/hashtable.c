@@ -1,19 +1,39 @@
+// Copyright (c) 2018-2019 The EFramework Project
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 #include "hashtable.h"
 
-static bucket_t *alloc_hash_data(uint32_t cap)
+static ef_bucket_t *alloc_hash_data(uint32_t cap)
 {
     size_t hash_size = sizeof(uint32_t) * cap;
-    size_t data_size = sizeof(bucket_t) * cap;
+    size_t data_size = sizeof(ef_bucket_t) * cap;
     uint32_t *data = (uint32_t *)malloc(hash_size + data_size);
     if (!data) {
         return NULL;
     }
     memset(data, -1, hash_size);
     memset(data + cap, 0, data_size);
-    return (bucket_t *)(data + cap);
+    return (ef_bucket_t *)(data + cap);
 }
 
-static void free_hash_data(bucket_t *data, uint32_t cap)
+static void free_hash_data(ef_bucket_t *data, uint32_t cap)
 {
     free((uint32_t *)data - cap);
 }
@@ -71,7 +91,7 @@ static uint32_t hash_recap(uint32_t cap)
     return cap + 1;
 }
 
-static void hash_free_bucket(hashtable_t *ht, bucket_t *pb)
+static void ef_hashtable_free_bucket(ef_hashtable_t *ht, ef_bucket_t *pb)
 {
     if (!pb->h && !pb->key) {
         return;
@@ -90,16 +110,16 @@ static void hash_free_bucket(hashtable_t *ht, bucket_t *pb)
     --ht->used;
 }
 
-hashtable_t *new_hash_table(uint32_t cap, val_dtor_t val_dtor)
+ef_hashtable_t *ef_hashtable_new(uint32_t cap, val_dtor_t val_dtor)
 {
     cap = hash_recap(cap);
 
-    bucket_t *bks = alloc_hash_data(cap);
+    ef_bucket_t *bks = alloc_hash_data(cap);
     if (!bks) {
         return NULL;
     }
 
-    hashtable_t *ht = (hashtable_t *)malloc(sizeof(hashtable_t));
+    ef_hashtable_t *ht = (ef_hashtable_t *)malloc(sizeof(ef_hashtable_t));
     if (!ht) {
         free_hash_data(bks, cap);
         return NULL;
@@ -116,9 +136,9 @@ hashtable_t *new_hash_table(uint32_t cap, val_dtor_t val_dtor)
     return ht;
 }
 
-bucket_t *hash_set_key_value(hashtable_t *ht, const char *key, size_t klen, void *val)
+ef_bucket_t *ef_hashtable_set_key_value(ef_hashtable_t *ht, const char *key, size_t klen, void *val)
 {
-    bucket_t *pb = hash_find_key(ht, key, klen);
+    ef_bucket_t *pb = ef_hashtable_find_key(ht, key, klen);
     if (pb) {
         if (ht->val_dtor && pb->val.ptr) {
             ht->val_dtor(pb->val.ptr);
@@ -133,7 +153,7 @@ alloc_bucket:
     } else if (ht->removed != -1) {
         pb = &ht->arrData[ht->removed];
         ht->removed = pb->next;
-    } else if (!hash_resize(ht, ht->cap << 1)) {
+    } else if (!ef_hashtable_resize(ht, ht->cap << 1)) {
         goto alloc_bucket;
     } else {
         return NULL;
@@ -157,7 +177,7 @@ alloc_bucket:
     return pb;
 }
 
-bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len)
+ef_bucket_t *ef_hashtable_find_key(ef_hashtable_t *ht, const char *key, size_t len)
 {
     unsigned long h = hash_func(key, len);
     int32_t offset = HASH_OFFSET(ht, h);
@@ -166,7 +186,7 @@ bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len)
         return NULL;
     }
 
-    bucket_t *pb = &ht->arrData[index];
+    ef_bucket_t *pb = &ht->arrData[index];
     while (1) {
         if (pb->h == h && pb->key &&
             pb->key->len == len &&
@@ -181,7 +201,7 @@ bucket_t *hash_find_key(hashtable_t *ht, const char *key, size_t len)
     return NULL;
 }
 
-int hash_remove_key(hashtable_t *ht, const char *key, size_t len)
+int ef_hashtable_remove_key(ef_hashtable_t *ht, const char *key, size_t len)
 {
     unsigned long h = hash_func(key, len);
     int32_t offset = HASH_OFFSET(ht, h);
@@ -190,13 +210,13 @@ int hash_remove_key(hashtable_t *ht, const char *key, size_t len)
         return 0;
     }
 
-    bucket_t *pb = &ht->arrData[*pidx];
+    ef_bucket_t *pb = &ht->arrData[*pidx];
     while (1) {
         if (pb->h == h && pb->key &&
             pb->key->len == len &&
             memcmp(pb->key->str, key, len) == 0) {
             *pidx = pb->next;
-            hash_free_bucket(ht, pb);
+            ef_hashtable_free_bucket(ht, pb);
             return 0;
         }
         if (pb->next == -1) {
@@ -208,28 +228,28 @@ int hash_remove_key(hashtable_t *ht, const char *key, size_t len)
     return 0;
 }
 
-void hash_free(hashtable_t *ht)
+void ef_hashtable_free(ef_hashtable_t *ht)
 {
     for (int idx = 0; idx < ht->cap; ++idx) {
-        hash_free_bucket(ht, &ht->arrData[idx]);
+        ef_hashtable_free_bucket(ht, &ht->arrData[idx]);
     }
     free_hash_data(ht->arrData, ht->cap);
     free(ht);
 }
 
-int hash_resize(hashtable_t *ht, uint32_t cap)
+int ef_hashtable_resize(ef_hashtable_t *ht, uint32_t cap)
 {
     cap = hash_recap(cap);
     if (cap < ht->used) {
         return -1;
     }
 
-    bucket_t *newbks = alloc_hash_data(cap);
+    ef_bucket_t *newbks = alloc_hash_data(cap);
     if (!newbks) {
         return -1;
     }
 
-    bucket_t *oldbks = ht->arrData;
+    ef_bucket_t *oldbks = ht->arrData;
     uint32_t oldcap = ht->cap;
     ht->arrData = newbks;
     ht->cap = cap;
@@ -237,16 +257,16 @@ int hash_resize(hashtable_t *ht, uint32_t cap)
     ht->removed = -1;
     ht->next = ht->used;
 
-    bucket_t *newptr = newbks;
+    ef_bucket_t *newptr = newbks;
     for (int idx = 0; idx < oldcap; ++idx) {
-        bucket_t *pb = &oldbks[idx];
+        ef_bucket_t *pb = &oldbks[idx];
         if (!pb->h && !pb->key) {
             continue;
         }
 
         newptr->h = pb->h;
         newptr->key = pb->key;
-        memcpy(&newptr->val, &pb->val, sizeof(bucket_value_t));
+        memcpy(&newptr->val, &pb->val, sizeof(ef_bucket_value_t));
 
         int32_t offset = HASH_OFFSET(ht, newptr->h);
         newptr->next = HASH_ENTRY(ht, offset);

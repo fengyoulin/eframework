@@ -232,13 +232,13 @@ long fcgi_proc(int fd, ef_routine_t *er)
         }
         if (req->params) {
             for (uint32_t idx = 0; idx < req->params->used; ++idx) {
-                bucket_t *pb = &req->params->arrData[idx];
+                ef_bucket_t *pb = &req->params->arrData[idx];
                 printf("%s: %s\n", pb->key->str, pb->val.str ? pb->val.str->str: "");
             }
         }
         fcgi_response_t *resp = fcgi_new_response(req);
         if (resp) {
-            headertab_set(resp->headers, "Content-Length", 14, "1048576", 7);
+            ef_headertab_set(resp->headers, "Content-Length", 14, "1048576", 7);
             ef_buffer_expand(resp->data, 1048576);
             for(int idx = 0; idx < 1048576; idx += 64) {
                 memcpy(resp->data->ptr + idx, "Hello, FastCGI!\nHello, FastCGI!\nHello, FastCGI!\nHello, FastCGI!\n", 64);

@@ -3,7 +3,7 @@
 
 #define BUFFER_SIZE 8192
 
-static int fcgi_parse_params(stringtab_t *tbl, unsigned char *data, size_t len)
+static int fcgi_parse_params(ef_stringtab_t *tbl, unsigned char *data, size_t len)
 {
     unsigned char *ptr = data, *name, *value;
     size_t name_len, value_len;
@@ -27,7 +27,7 @@ static int fcgi_parse_params(stringtab_t *tbl, unsigned char *data, size_t len)
         ptr += name_len;
         value = ptr;
         ptr += value_len;
-        stringtab_set(tbl, name, name_len, value_len ? value : NULL, value_len);
+        ef_stringtab_set(tbl, name, name_len, value_len ? value : NULL, value_len);
     }
     return 0;
 }
@@ -40,6 +40,7 @@ fcgi_request_t *fcgi_read_request(int sockfd)
     fcgi_header_t fcgi_hdr;
     fcgi_begin_request_t bg_req;
     size_t reads, length;
+    unsigned char buf[8];
 
     reader = ef_bio_reader_new(sockfd, BUFFER_SIZE);
     if (!reader) {
@@ -73,7 +74,7 @@ fcgi_request_t *fcgi_read_request(int sockfd)
     request->request_id = MAKE_UINT16(fcgi_hdr.requestIdB0, fcgi_hdr.requestIdB1);
     request->role = MAKE_UINT16(bg_req.roleB0, bg_req.roleB1);
     request->flags = bg_req.flags;
-    request->params = stringtab_new(0);
+    request->params = ef_stringtab_new(0);
     request->data = NULL;
 
     // FCGI_PARAMS
@@ -108,6 +109,10 @@ fcgi_request_t *fcgi_read_request(int sockfd)
         if (reads < length) {
             ef_buffer_free(buffer, 1);
             goto exit_request;
+        }
+
+        if (fcgi_hdr.paddingLength) {
+            // ef_bio_read skip
         }
     }
     if (buffer) {
@@ -147,6 +152,10 @@ fcgi_request_t *fcgi_read_request(int sockfd)
         if (reads < length) {
             goto exit_request;
         }
+
+        if (fcgi_hdr.paddingLength) {
+            // ef_bio_read skip
+        }
     }
 
     goto exit_read;
@@ -167,7 +176,7 @@ exit_read:
 void fcgi_free_request(fcgi_request_t *request)
 {
     if (request->params) {
-        stringtab_free(request->params);
+        ef_stringtab_free(request->params);
     }
     if (request->data) {
         ef_buffer_free(request->data, 1);
@@ -187,7 +196,7 @@ fcgi_response_t *fcgi_new_response(fcgi_request_t *request)
         free(response);
         return NULL;
     }
-    response->headers = headertab_new(0);
+    response->headers = ef_headertab_new(0);
     if (!response->headers) {
         ef_buffer_free(response->data, 1);
         free(response);
@@ -202,7 +211,7 @@ void fcgi_free_response(fcgi_response_t *response, int free_request)
         ef_buffer_free(response->data, 1);
     }
     if (response->headers) {
-        stringtab_free(response->headers);
+        ef_headertab_free(response->headers);
     }
     if (free_request && response->request) {
         fcgi_free_request(response->request);
@@ -227,7 +236,7 @@ int fcgi_write_response(int sockfd, fcgi_response_t *response, int free)
 
     if (response->headers) {
         for(uint32_t idx = 0; idx < response->headers->cap; ++idx) {
-            bucket_t *pb = &response->headers->arrData[idx];
+            ef_bucket_t *pb = &response->headers->arrData[idx];
             if (!pb->key) {
                 continue;
             }

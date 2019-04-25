@@ -28,9 +28,9 @@ typedef struct ef_curl_request_t {
     unsigned short status;
     const char *protocol;
     char *request_uri;
-    stringtab_t *headers;
-    stringtab_t *cookies;
-    stringtab_t *request_body;
+    ef_stringtab_t *headers;
+    ef_stringtab_t *cookies;
+    ef_stringtab_t *request_body;
 } ef_curl_request;
 
 typedef struct ef_curl_response_t {
@@ -41,7 +41,7 @@ typedef struct ef_curl_response_t {
     char *bufend;
     char *bufsend;
     long chunk_remain;
-    stringtab_t *headers;
+    ef_stringtab_t *headers;
     char buf[MAX_RESP_BUFSIZE];
 } ef_curl_response;
 

@@ -67,13 +67,13 @@ typedef struct _fcgi_request {
     uint16_t request_id;
     uint16_t role;
     uint8_t flags;
-    stringtab_t *params;
+    ef_stringtab_t *params;
     ef_buffer_t *data;
 } fcgi_request_t;
 
 typedef struct _fcgi_response {
     fcgi_request_t *request;
-    headertab_t *headers;
+    ef_headertab_t *headers;
     ef_buffer_t *data;
 } fcgi_response_t;
 
