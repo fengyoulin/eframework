@@ -47,7 +47,7 @@ static int ef_epoll_dissociate(ef_poll_t *p, int fd)
     return epoll_ctl(ep->epfd, EPOLL_CTL_DEL, fd, e);
 }
 
-static int ef_epoll_wait(ef_poll_t *p, ef_event_t *evts, int count, int timeout)
+static int ef_epoll_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs)
 {
     int ret, idx;
     ef_epoll_t *ep = (ef_epoll_t *)p;
@@ -57,7 +57,7 @@ static int ef_epoll_wait(ef_poll_t *p, ef_event_t *evts, int count, int timeout)
     }
 
 again:
-    ret = epoll_wait(ep->epfd, &ep->events[0], count, timeout);
+    ret = epoll_wait(ep->epfd, &ep->events[0], count, millisecs);
     if (ret < 0) {
         if (errno != EINTR) {
             return ret;

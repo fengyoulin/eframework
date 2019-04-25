@@ -41,25 +41,27 @@ static int ef_port_dissociate(ef_poll_t *p, int fd)
     return port_dissociate(ep->ptfd, PORT_SOURCE_FD, fd);
 }
 
-static int ef_port_wait(ef_poll_t *p, ef_event_t *evts, int count, int timeout)
+static int ef_port_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs)
 {
     uint_t nget, idx;
-    timespec_t tout;
+    timespec_t timeout;
     ef_port_t *ep = (ef_port_t *)p;
 
     if (count > ep->count) {
         count = ep->count;
     }
 
-    tout.tv_sec = timeout / 1000;
-    tout.tv_nsec = (timeout % 1000) * 1000000;
+    timeout.tv_sec = millisecs / 1000;
+    timeout.tv_nsec = (millisecs % 1000) * 1000000;
+    nget = 1;
 
 again:
-    if (port_getn(ep->ptfd, &ep->events[0], count, &nget, &tout) < 0) {
-        if (errno != EINTR) {
+    if (port_getn(ep->ptfd, &ep->events[0], count, &nget, &timeout) < 0) {
+        if (errno == EINTR) {
+            goto again;
+        } else if (errno != ETIME) {
             return -1;
         }
-        goto again;
     }
 
     for (idx = 0; idx < nget; ++idx) {
