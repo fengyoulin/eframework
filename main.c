@@ -265,7 +265,7 @@ void signal_handler(int num)
 
 int main(int argc, char *argv[])
 {
-    ef_init(&efr, 1024 * 1024, 256, 1024, 1000 * 30, 16);
+    ef_init(&efr, 64 * 1024, 256, 512, 1000 * 60, 16);
 
     struct sigaction sa = {0};
     sa.sa_handler = signal_handler;

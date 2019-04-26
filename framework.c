@@ -34,7 +34,7 @@ ef_poll_t *ef_port_create(int count);
 
 ef_runtime_t *_ef_runtime = NULL;
 
-inline ef_queue_fd_t *ef_alloc_fd(ef_runtime_t *rt) __attribute__((always_inline));
+inline int ef_queue_fd(ef_runtime_t *rt, ef_listen_info_t *li, int fd) __attribute__((always_inline));
 inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket) __attribute__((always_inline));
 
 long ef_proc(void *param)
@@ -47,17 +47,6 @@ long ef_proc(void *param)
     }
     close(fd);
     return retval;
-}
-
-inline ef_queue_fd_t *ef_alloc_fd(ef_runtime_t *rt)
-{
-    ef_queue_fd_t *qf = NULL;
-    if (!ef_list_empty(&rt->free_fd_list)) {
-        qf = CAST_PARENT_PTR(ef_list_remove_after(&rt->free_fd_list), ef_queue_fd_t, list_entry);
-    } else {
-        qf = (ef_queue_fd_t*)malloc(sizeof(ef_queue_fd_t));
-    }
-    return qf;
 }
 
 inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
@@ -73,6 +62,23 @@ inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
         return 0;
     }
     return -1;
+}
+
+inline int ef_queue_fd(ef_runtime_t *rt, ef_listen_info_t *li, int fd)
+{
+    ef_queue_fd_t *qf;
+    if (!ef_list_empty(&rt->free_fd_list)) {
+        qf = CAST_PARENT_PTR(ef_list_remove_after(&rt->free_fd_list), ef_queue_fd_t, list_entry);
+    } else {
+        qf = (ef_queue_fd_t*)malloc(sizeof(ef_queue_fd_t));
+    }
+    if (!qf) {
+        close(fd);
+        return -1;
+    }
+    qf->fd = fd;
+    ef_list_insert_before(&li->fd_list, &qf->list_entry);
+    return 0;
 }
 
 int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, int shrink_millisecs, int count_per_shrink)
@@ -110,93 +116,142 @@ int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t proc)
 
 int ef_run_loop(ef_runtime_t *rt)
 {
-    ef_list_entry_t *lle = ef_list_entry_after(&rt->listen_list);
-    while (lle != &rt->listen_list) {
-        ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
-        int retval = rt->p->associate(rt->p, li->poll_data.fd, EF_POLLIN, &li->poll_data);
-        if (retval < 0) {
-            return retval;
-        }
-        lle = ef_list_entry_after(lle);
-    }
     ef_event_t evts[1024];
-    while (1) {
-        int retcnt = rt->p->wait(rt->p, &evts[0], 1024, 1000);
-        if(retcnt < 0) {
-            return retcnt;
+
+    /*
+     * add all listen socket fds to poll object
+     */
+    ef_list_entry_t *ent = ef_list_entry_after(&rt->listen_list);
+    while (ent != &rt->listen_list) {
+        ef_listen_info_t *li = CAST_PARENT_PTR(ent, ef_listen_info_t, list_entry);
+        int ret = rt->p->associate(rt->p, li->poll_data.fd, EF_POLLIN, &li->poll_data);
+        if (ret < 0) {
+            return ret;
         }
-        // printf("all_count: %ld\nrun_count: %ld\n", rt->co_pool.full_count, rt->co_pool.full_count - rt->co_pool.free_count);
-        for (int i = 0; i < retcnt; ++i) {
+        ent = ef_list_entry_after(ent);
+    }
+
+    /*
+     * the main event loop
+     */
+    while (1) {
+        int cnt = rt->p->wait(rt->p, &evts[0], 1024, 1000);
+        if (cnt < 0) {
+            return cnt;
+        }
+
+        /*
+         * check all events returned by poll wait function
+         */
+        for (int i = 0; i < cnt; ++i) {
             ef_poll_data_t *ed = (ef_poll_data_t*)evts[i].ptr;
             if (ed->type == POLL_TYPE_LISTEN) {
-                int runret = 0;
                 while (1) {
                     int socket = accept(ed->fd, NULL, NULL);
                     if (socket < 0) {
                         break;
                     }
                     ef_listen_info_t *li = CAST_PARENT_PTR(ed, ef_listen_info_t, poll_data);
-                    if (runret >= 0) {
-                        runret = ef_routine_run(rt, li->ef_proc, socket);
-                    }
-                    if (runret < 0) {
-                        ef_queue_fd_t *qf = ef_alloc_fd(rt);
-                        if (qf) {
-                            qf->fd = socket;
-                            ef_list_insert_before(&li->fd_list, &qf->list_entry);
-                        } else {
-                            close(socket);
-                        }
+
+                    /*
+                     * put new connection to queue
+                     */
+                    int ret = ef_queue_fd(rt, li, socket);
+                    if (ret < 0) {
+                        break;
                     }
                 }
-            }
-            else if (ed->type == POLL_TYPE_RDWRCON) {
+
+                /*
+                 * solaris event port will auto dissociate fd
+                 */
+                rt->p->associate(rt->p, ed->fd, EF_POLLIN, ed);
+            } else if (ed->type == POLL_TYPE_RDWRCON) {
                 ef_coroutine_resume(&rt->co_pool, &ed->routine_ptr->co, evts[i].events);
             }
         }
-        lle = ef_list_entry_after(&rt->listen_list);
-        while (lle != &rt->listen_list) {
-            ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
-            ef_list_entry_t *fle = ef_list_entry_after(&li->fd_list);
-            while (fle != &li->fd_list) {
-                ef_queue_fd_t *qf = CAST_PARENT_PTR(fle, ef_queue_fd_t, list_entry);
-                fle = ef_list_entry_after(fle);
-                int runret = ef_routine_run(rt, li->ef_proc, qf->fd);
-                if (runret < 0) {
+
+        /*
+         * handle queued connections
+         */
+        ent = ef_list_entry_after(&rt->listen_list);
+
+        /*
+         * every listening sockets
+         */
+        while (ent != &rt->listen_list) {
+
+            ef_listen_info_t *li = CAST_PARENT_PTR(ent, ef_listen_info_t, list_entry);
+            ef_list_entry_t *enf = ef_list_entry_after(&li->fd_list);
+
+            /*
+             * every queued connection
+             */
+            while (enf != &li->fd_list) {
+
+                ef_queue_fd_t *qf = CAST_PARENT_PTR(enf, ef_queue_fd_t, list_entry);
+                enf = ef_list_entry_after(enf);
+
+                int ret = ef_routine_run(rt, li->ef_proc, qf->fd);
+                if (ret < 0) {
                     goto exit_queue;
                 } else {
                     ef_list_remove(&qf->list_entry);
                     ef_list_insert_after(&rt->free_fd_list, &qf->list_entry);
                 }
             }
-            lle = ef_list_entry_after(lle);
+            ent = ef_list_entry_after(ent);
         }
+
 exit_queue:
         if (rt->stopping) {
+
+            /*
+             * close all listening socket
+             */
             if (!ef_list_empty(&rt->listen_list)) {
-                lle = ef_list_entry_after(&rt->listen_list);
-                while (lle != &rt->listen_list) {
-                    ef_listen_info_t *li = CAST_PARENT_PTR(lle, ef_listen_info_t, list_entry);
-                    lle = ef_list_entry_after(lle);
+
+                ent = ef_list_entry_after(&rt->listen_list);
+
+                while (ent != &rt->listen_list) {
+
+                    ef_listen_info_t *li = CAST_PARENT_PTR(ent, ef_listen_info_t, list_entry);
+                    ent = ef_list_entry_after(ent);
+
+                    /*
+                     * close listening socket
+                     */
                     if (li->poll_data.fd >= 0) {
                         rt->p->dissociate(rt->p, li->poll_data.fd);
                         close(li->poll_data.fd);
                         li->poll_data.fd = -1;
                     }
+
+                    /*
+                     * free listen info if connection queue empty
+                     */
                     if (ef_list_empty(&li->fd_list)) {
                         ef_list_remove(&li->list_entry);
                         free(li);
                     }
                 }
             }
+
+            /*
+             * destroy the unused fd queue item
+             */
             if (!ef_list_empty(&rt->free_fd_list)) {
-                ef_list_entry_t *ffle = ef_list_remove_after(&rt->free_fd_list);
-                while (ffle != NULL) {
-                    ef_queue_fd_t *qf = CAST_PARENT_PTR(ffle, ef_queue_fd_t, list_entry);
-                    ffle = ef_list_remove_after(&rt->free_fd_list);
+                ent = ef_list_remove_after(&rt->free_fd_list);
+                while (ent != NULL) {
+                    ef_queue_fd_t *qf = CAST_PARENT_PTR(ent, ef_queue_fd_t, list_entry);
+                    ent = ef_list_remove_after(&rt->free_fd_list);
                     free(qf);
                 }
             }
+
+            /*
+             * shrink coroutine pool, to free
+             */
             if (rt->co_pool.free_count == rt->co_pool.full_count) {
                 rt->p->free(rt->p);
                 ef_coroutine_pool_shrink(&rt->co_pool, 0, -rt->co_pool.full_count);
@@ -205,6 +260,7 @@ exit_queue:
                 ef_coroutine_pool_shrink(&rt->co_pool, 0, -rt->co_pool.free_count);
             }
         }
+
         if (rt->co_pool.free_count > 0 && rt->co_pool.full_count > rt->co_pool.limit_min) {
             ef_coroutine_pool_shrink(&rt->co_pool, rt->shrink_millisecs, rt->count_per_shrink);
         }
@@ -241,7 +297,8 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
     if (events & (EF_POLLERR | EF_POLLHUP)) {
         retval = -1;
     } else if (events & EF_POLLOUT) {
-        retval = connect(sockfd, addr, addrlen);
+        int len = sizeof(retval);
+        getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &retval, &len);
     }
     er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd);
 exit_conn:
