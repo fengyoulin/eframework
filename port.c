@@ -29,15 +29,24 @@ typedef struct _ef_port {
     port_event_t events[0];
 } ef_port_t;
 
-static int ef_port_associate(ef_poll_t *p, int fd, int events, void *ptr)
+static int ef_port_associate(ef_poll_t *p, int fd, int events, void *ptr, int fired)
 {
     ef_port_t *ep = (ef_port_t *)p;
     return port_associate(ep->ptfd, PORT_SOURCE_FD, fd, events, ptr);
 }
 
-static int ef_port_dissociate(ef_poll_t *p, int fd)
+static int ef_port_dissociate(ef_poll_t *p, int fd, int fired)
 {
-    ef_port_t *ep = (ef_port_t *)p;
+    ef_port_t *ep;
+
+    /*
+     * solaris event port will auto dissociate fd after event fired
+     */
+    if (fired) {
+        return 0;
+    }
+
+    ep = (ef_port_t *)p;
     return port_dissociate(ep->ptfd, PORT_SOURCE_FD, fd);
 }
 
@@ -53,6 +62,10 @@ static int ef_port_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs
 
     timeout.tv_sec = millisecs / 1000;
     timeout.tv_nsec = (millisecs % 1000) * 1000000;
+
+    /*
+     * at least one event
+     */
     nget = 1;
 
 again:
@@ -85,10 +98,10 @@ ef_poll_t *ef_port_create(int count)
     size_t size = sizeof(ef_port_t);
 
     /*
-     * event buffer at least 16
+     * event buffer at least 128
      */
-    if (count < 16) {
-        count = 16;
+    if (count < 128) {
+        count = 128;
     }
 
     size += sizeof(port_event_t) * count;

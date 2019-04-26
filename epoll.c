@@ -31,16 +31,27 @@ typedef struct _ef_epoll {
     epoll_event_t events[0];
 } ef_epoll_t;
 
-static int ef_epoll_associate(ef_poll_t *p, int fd, int events, void *ptr)
+static int ef_epoll_associate(ef_poll_t *p, int fd, int events, void *ptr, int fired)
 {
-    ef_epoll_t *ep = (ef_epoll_t *)p;
-    epoll_event_t *e = &ep->events[0];
+    ef_epoll_t *ep;
+    epoll_event_t *e;
+
+    /*
+     * epoll will not auto dissociate fd after event fired
+     */
+    if (fired) {
+        return 0;
+    }
+
+    ep = (ef_epoll_t *)p;
+    e = &ep->events[0];
     e->events = events;
     e->data.ptr = ptr;
+
     return epoll_ctl(ep->epfd, EPOLL_CTL_ADD, fd, e);
 }
 
-static int ef_epoll_dissociate(ef_poll_t *p, int fd)
+static int ef_epoll_dissociate(ef_poll_t *p, int fd, int fired)
 {
     ef_epoll_t *ep = (ef_epoll_t *)p;
     epoll_event_t *e = &ep->events[0];
@@ -86,10 +97,10 @@ ef_poll_t *ef_epoll_create(int count)
     size_t size = sizeof(ef_epoll_t);
 
     /*
-     * event buffer at least 16
+     * event buffer at least 128
      */
-    if (count < 16) {
-        count = 16;
+    if (count < 128) {
+        count = 128;
     }
 
     size += sizeof(epoll_event_t) * count;

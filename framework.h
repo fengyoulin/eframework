@@ -32,8 +32,8 @@ typedef struct _ef_poll ef_poll_t;
 
 typedef ef_poll_t *(*create_func_t)(int count);
 
-typedef int (*associate_func_t)(ef_poll_t *p, int fd, int events, void *ptr);
-typedef int (*dissociate_func_t)(ef_poll_t *p, int fd);
+typedef int (*associate_func_t)(ef_poll_t *p, int fd, int events, void *ptr, int fired);
+typedef int (*dissociate_func_t)(ef_poll_t *p, int fd, int fired);
 typedef int (*wait_func_t)(ef_poll_t *p, ef_event_t *evts, int count, int millisecs);
 typedef int (*free_func_t)(ef_poll_t *p);
 
@@ -52,13 +52,13 @@ struct _ef_poll {
 /*
  * the macros are equal in poll and epoll
  */
-#define EF_POLLIN 0x001
+#define EF_POLLIN  0x001
 #define EF_POLLOUT 0x004
 #define EF_POLLERR 0x008
 #define EF_POLLHUP 0x010
 
-#define POLL_TYPE_LISTEN 1
-#define POLL_TYPE_RDWRCON 2
+#define FD_TYPE_LISTEN 1 // listen
+#define FD_TYPE_RWC    2 // read (recv), write (send), connect
 
 typedef struct _ef_routine ef_routine_t;
 typedef struct _ef_runtime ef_runtime_t;
@@ -103,9 +103,9 @@ struct _ef_routine {
     ef_poll_data_t poll_data;
 };
 
-extern ef_runtime_t *_ef_runtime;
+extern ef_runtime_t *ef_runtime;
 
-#define ef_routine_current() ((ef_routine_t*)ef_coroutine_current(&_ef_runtime->co_pool))
+#define ef_routine_current() ((ef_routine_t*)ef_coroutine_current(&ef_runtime->co_pool))
 
 int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, int shrink_millisecs, int count_per_shrink);
 int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t ef_proc);
@@ -119,12 +119,16 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
 
 #define ef_wrap_connect(sockfd, addr, addrlen) \
     ef_routine_connect(NULL, sockfd, addr, addrlen)
+
 #define ef_wrap_read(fd, buf, count) \
     ef_routine_read(NULL, fd, buf, count)
+
 #define ef_wrap_write(fd, buf, count) \
     ef_routine_write(NULL, fd, buf, count)
+
 #define ef_wrap_recv(sockfd, buf, len, flags) \
     ef_routine_recv(NULL, sockfd, buf, len, flags)
+
 #define ef_wrap_send(sockfd, buf, len, flags) \
     ef_routine_send(NULL, sockfd, buf, len, flags)
 
