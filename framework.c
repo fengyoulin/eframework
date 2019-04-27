@@ -30,6 +30,7 @@
 #include <sys/socket.h>
 
 ef_poll_t *ef_epoll_create(int count);
+ef_poll_t *ef_poll_create(int count);
 ef_poll_t *ef_port_create(int count);
 
 /*
