@@ -29,10 +29,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-ef_poll_t *ef_epoll_create(int count);
-ef_poll_t *ef_poll_create(int count);
-ef_poll_t *ef_port_create(int count);
-
 /*
  * the global pointer
  */
@@ -100,7 +96,7 @@ inline int ef_queue_fd(ef_runtime_t *rt, ef_listen_info_t *li, int fd)
 
 int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, int shrink_millisecs, int count_per_shrink)
 {
-    ef_poll_t *p = ef_epoll_create(1024);
+    ef_poll_t *p = create_poll(1024);
     if (!p) {
         return -1;
     }

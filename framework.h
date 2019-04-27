@@ -23,39 +23,10 @@
 
 #include "coroutine.h"
 #include "structure/list.h"
+#include "poll.h"
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-
-typedef struct _ef_event ef_event_t;
-typedef struct _ef_poll ef_poll_t;
-
-typedef ef_poll_t *(*create_func_t)(int count);
-
-typedef int (*associate_func_t)(ef_poll_t *p, int fd, int events, void *ptr, int fired);
-typedef int (*dissociate_func_t)(ef_poll_t *p, int fd, int fired);
-typedef int (*wait_func_t)(ef_poll_t *p, ef_event_t *evts, int count, int millisecs);
-typedef int (*free_func_t)(ef_poll_t *p);
-
-struct _ef_event {
-    int events;
-    void *ptr;
-};
-
-struct _ef_poll {
-    associate_func_t associate;
-    dissociate_func_t dissociate;
-    wait_func_t wait;
-    free_func_t free;
-};
-
-/*
- * the macros are equal in poll and epoll
- */
-#define EF_POLLIN  0x001
-#define EF_POLLOUT 0x004
-#define EF_POLLERR 0x008
-#define EF_POLLHUP 0x010
 
 #define FD_TYPE_LISTEN 1 // listen
 #define FD_TYPE_RWC    2 // read (recv), write (send), connect

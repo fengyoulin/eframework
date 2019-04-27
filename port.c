@@ -18,9 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "framework.h"
+#include "poll.h"
 #include <port.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 typedef struct _ef_port {
     ef_poll_t poll;
@@ -122,3 +124,4 @@ ef_poll_t *ef_port_create(int count)
     return &ep->poll;
 }
 
+create_func_t create_poll = ef_port_create;

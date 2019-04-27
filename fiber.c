@@ -32,7 +32,10 @@ void *ef_fiber_internal_init(ef_fiber_t *fiber, ef_fiber_proc_t fiber_proc, void
 
 ef_fiber_t *ef_fiber_create(ef_fiber_sched_t *rt, size_t stack_size, size_t header_size, ef_fiber_proc_t fiber_proc, void *param)
 {
+    ef_fiber_t *fiber;
+    void *stack;
     long page_size = ef_page_size;
+
     if (stack_size == 0) {
         stack_size = (size_t)page_size;
     }
@@ -45,7 +48,7 @@ ef_fiber_t *ef_fiber_create(ef_fiber_sched_t *rt, size_t stack_size, size_t head
     /*
      * reserve the stack area, no physical pages here
      */
-    void *stack = mmap(NULL, stack_size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    stack = mmap(NULL, stack_size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (MAP_FAILED == stack) {
         return NULL;
     }
@@ -54,6 +57,7 @@ ef_fiber_t *ef_fiber_create(ef_fiber_sched_t *rt, size_t stack_size, size_t head
      * map the highest page in the stack area
      */
     if (mprotect((char *)stack + stack_size - page_size, page_size, PROT_READ | PROT_WRITE) < 0) {
+        munmap(stack, stack_size);
         return NULL;
     }
 
@@ -61,7 +65,7 @@ ef_fiber_t *ef_fiber_create(ef_fiber_sched_t *rt, size_t stack_size, size_t head
      * the topmost header_size bytes used by ef_fiber_t and
      * maybe some outter struct which ef_fiber_t nested in
      */
-    ef_fiber_t *fiber = (ef_fiber_t*)((char *)stack + stack_size - header_size);
+    fiber = (ef_fiber_t*)((char *)stack + stack_size - header_size);
     fiber->stack_size = stack_size;
     fiber->stack_area = stack;
     fiber->stack_upper = (char *)stack + stack_size - header_size;
@@ -85,8 +89,11 @@ void ef_fiber_delete(ef_fiber_t *fiber)
     munmap(fiber->stack_area, fiber->stack_size);
 }
 
-long ef_fiber_resume(ef_fiber_sched_t *rt, ef_fiber_t *to, long retval)
+int ef_fiber_resume(ef_fiber_sched_t *rt, ef_fiber_t *to, long sndval, long *retval)
 {
+    long ret;
+    ef_fiber_t *current;
+
     /*
      * ensure the fiber is initialized and not exited
      */
@@ -96,17 +103,23 @@ long ef_fiber_resume(ef_fiber_sched_t *rt, ef_fiber_t *to, long retval)
         }
         return ERROR_FIBER_NOT_INITED;
     }
-    ef_fiber_t *current = rt->current_fiber;
+
+    current = rt->current_fiber;
     to->parent = current;
     rt->current_fiber = to;
-    return ef_fiber_internal_swap(to->stack_ptr, &current->stack_ptr, retval);
+    ret = ef_fiber_internal_swap(to->stack_ptr, &current->stack_ptr, sndval);
+
+    if (retval) {
+        *retval = ret;
+    }
+    return 0;
 }
 
-long ef_fiber_yield(ef_fiber_sched_t *rt, long retval)
+long ef_fiber_yield(ef_fiber_sched_t *rt, long sndval)
 {
     ef_fiber_t *current = rt->current_fiber;
     rt->current_fiber = current->parent;
-    return ef_fiber_internal_swap(current->parent->stack_ptr, &current->stack_ptr, retval);
+    return ef_fiber_internal_swap(current->parent->stack_ptr, &current->stack_ptr, sndval);
 }
 
 int ef_fiber_expand_stack(ef_fiber_t *fiber, void *addr)
@@ -145,7 +158,14 @@ void ef_fiber_sigsegv_handler(int sig, siginfo_t *info, void *ucontext)
 
 int ef_fiber_init_sched(ef_fiber_sched_t *rt, int handle_sigsegv)
 {
+    stack_t ss;
+    struct sigaction sa = {0};
+
+    /*
+     * the global pointer used by sigsegv handler
+     */
     ef_fiber_sched = rt;
+
     rt->current_fiber = &rt->thread_fiber;
     ef_page_size = sysconf(_SC_PAGESIZE);
     if (ef_page_size < 0) {
@@ -159,7 +179,6 @@ int ef_fiber_init_sched(ef_fiber_sched_t *rt, int handle_sigsegv)
     /*
      * use alt stack, when sigsegv caused by fiber stack, user stack maybe invalid
      */
-    stack_t ss;
     ss.ss_sp = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (ss.ss_sp == NULL) {
         return -1;
@@ -173,7 +192,6 @@ int ef_fiber_init_sched(ef_fiber_sched_t *rt, int handle_sigsegv)
     /*
      * register sigsegv handler for fiber stack expanding
      */
-    struct sigaction sa = {0};
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sa.sa_sigaction = ef_fiber_sigsegv_handler;
     return sigaction(SIGSEGV, &sa, NULL);

@@ -21,11 +21,10 @@
 #ifndef _FIBER_HEADER_
 #define _FIBER_HEADER_
 
-#include <limits.h>
 #include <sys/mman.h>
 
-#define ERROR_FIBER_EXITED LONG_MIN
-#define ERROR_FIBER_NOT_INITED (LONG_MIN+1)
+#define ERROR_FIBER_EXITED     (-1)
+#define ERROR_FIBER_NOT_INITED (-2)
 
 #define FIBER_STATUS_EXITED 0
 #define FIBER_STATUS_INITED 1
@@ -127,15 +126,15 @@ typedef long (*ef_fiber_proc_t)(void *param);
 
 /*
  * run a just initialized fiber or resume a fiber which doing yield
- * retval will be the return value of the yield function in the latter
+ * sndval will be the return value of the yield function in the latter
  */
-long ef_fiber_resume(ef_fiber_sched_t *rt, ef_fiber_t *to, long retval);
+int ef_fiber_resume(ef_fiber_sched_t *rt, ef_fiber_t *to, long sndval, long *retval);
 
 /*
  * yield cpu and return to parent fiber (maybe system thread)
- * the retval will be the return value of the resume function in parent
+ * the sndval will be the retval of the resume function in parent
  */
-long ef_fiber_yield(ef_fiber_sched_t *rt, long retval);
+long ef_fiber_yield(ef_fiber_sched_t *rt, long sndval);
 
 /*
  * create a fiber with stack_size sized stack, and reserve header_size bytes

@@ -18,7 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "framework.h"
+#include "poll.h"
+#include <stdlib.h>
+#include <unistd.h>
 #include <sys/epoll.h>
 
 typedef struct epoll_event epoll_event_t;
@@ -118,3 +120,4 @@ ef_poll_t *ef_epoll_create(int count)
     return &ep->poll;
 }
 
+create_func_t create_poll = ef_epoll_create;

@@ -34,7 +34,7 @@ void ef_coroutine_pool_init(ef_coroutine_pool_t *pool, size_t stack_size, int li
 
 ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, size_t header_size, ef_coroutine_proc_t fiber_proc, void *param)
 {
-    ef_coroutine_t *co = NULL;
+    ef_coroutine_t *co;
 
     /*
      * try take one from the free_list
@@ -53,12 +53,11 @@ ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, size_t header_siz
     /*
      * create use the fiber api
      */
-    ef_fiber_t *fiber = ef_fiber_create(&pool->fiber_sched, pool->stack_size, header_size, fiber_proc, param);
-    if (fiber == NULL) {
+    co = (ef_coroutine_t *)ef_fiber_create(&pool->fiber_sched, pool->stack_size, header_size, fiber_proc, param);
+    if (!co) {
         return NULL;
     }
 
-    co = (ef_coroutine_t*)fiber;
     ++pool->full_count;
     ef_list_insert_after(&pool->full_list, &co->full_entry);
     return co;
@@ -66,21 +65,31 @@ ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, size_t header_siz
 
 long ef_coroutine_resume(ef_coroutine_pool_t *pool, ef_coroutine_t *co, long to_yield)
 {
-    long retval = ef_fiber_resume(&pool->fiber_sched, &co->fiber, to_yield);
+    long retval = 0;
+
+    int res = ef_fiber_resume(&pool->fiber_sched, &co->fiber, to_yield, &retval);
+    if (res < 0) {
+        return retval;
+    }
 
     /*
      * add to free_list when exited
      */
-    if (ef_fiber_is_exited(&co->fiber) && retval != ERROR_FIBER_EXITED) {
+    if (ef_fiber_is_exited(&co->fiber)) {
         gettimeofday(&co->last_run_time, NULL);
         ef_list_insert_after(&pool->free_list, &co->free_entry);
         ++pool->free_count;
     }
+
     return retval;
 }
 
 int ef_coroutine_pool_shrink(ef_coroutine_pool_t *pool, int idle_millisecs, int max_count)
 {
+    int beyond_min, free_count = 0;
+    struct timeval tv = {0};
+    ef_list_entry_t *list_tail;
+
     if (pool->free_count <= 0 || (max_count > 0 && pool->full_count <= pool->limit_min)) {
         return 0;
     }
@@ -88,7 +97,7 @@ int ef_coroutine_pool_shrink(ef_coroutine_pool_t *pool, int idle_millisecs, int 
     /*
      * calculate the number to free
      */
-    int beyond_min = pool->full_count - pool->limit_min;
+    beyond_min = pool->full_count - pool->limit_min;
     if (max_count > beyond_min) {
         max_count = beyond_min;
     }
@@ -96,14 +105,12 @@ int ef_coroutine_pool_shrink(ef_coroutine_pool_t *pool, int idle_millisecs, int 
         max_count = -max_count;
     }
 
-    int free_count = 0;
-    struct timeval tv = {0};
     gettimeofday(&tv, NULL);
 
     /*
      * free at most max_count fibers from free_list
      */
-    ef_list_entry_t *list_tail = ef_list_entry_before(&pool->free_list);
+    list_tail = ef_list_entry_before(&pool->free_list);
     while (list_tail != &pool->free_list && max_count--) {
 
         ef_coroutine_t *co = CAST_PARENT_PTR(list_tail, ef_coroutine_t, free_entry);

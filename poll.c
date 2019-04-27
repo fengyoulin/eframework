@@ -18,8 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "framework.h"
+#include "poll.h"
 #include <poll.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct pollfd pollfd_t;
@@ -237,3 +238,4 @@ ef_poll_t *ef_poll_create(int count)
     return &ep->poll;
 }
 
+create_func_t create_poll = ef_poll_create;
