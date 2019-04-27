@@ -171,7 +171,7 @@ int ef_run_loop(ef_runtime_t *rt)
      */
     while (1) {
         int cnt = rt->p->wait(rt->p, &evts[0], 1024, 1000);
-        if (cnt < 0) {
+        if (cnt < 0 && errno != EINTR) {
             return cnt;
         }
 

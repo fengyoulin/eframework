@@ -20,7 +20,6 @@
 
 #include "framework.h"
 #include <poll.h>
-#include <errno.h>
 #include <string.h>
 
 typedef struct pollfd pollfd_t;
@@ -159,13 +158,9 @@ static int ef_poll_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs
     int ret, idx, cnt;
     ef_pollsys_t *ep = (ef_pollsys_t *)p;
 
-again:
     ret = poll(ep->pfds, ep->nfds, millisecs);
-    if (ret < 0) {
-        if (errno != EINTR) {
-            return ret;
-        }
-        goto again;
+    if (ret <= 0) {
+        return ret;
     }
 
     if (count > ret) {

@@ -68,13 +68,11 @@ static int ef_port_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs
      */
     nget = 1;
 
-again:
     if (port_getn(ep->ptfd, &ep->events[0], count, &nget, &timeout) < 0) {
-        if (errno == EINTR) {
-            goto again;
-        } else if (errno != ETIME) {
+        if (errno != ETIME) {
             return -1;
         }
+        return 0;
     }
 
     for (idx = 0; idx < nget; ++idx) {

@@ -20,7 +20,6 @@
 
 #include "framework.h"
 #include <sys/epoll.h>
-#include <errno.h>
 
 typedef struct epoll_event epoll_event_t;
 
@@ -67,13 +66,9 @@ static int ef_epoll_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisec
         count = ep->count;
     }
 
-again:
     ret = epoll_wait(ep->epfd, &ep->events[0], count, millisecs);
-    if (ret < 0) {
-        if (errno != EINTR) {
-            return ret;
-        }
-        goto again;
+    if (ret <= 0) {
+        return ret;
     }
 
     for (idx = 0; idx < ret; ++idx) {
