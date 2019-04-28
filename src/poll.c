@@ -192,7 +192,7 @@ static int ef_poll_free(ef_poll_t *p)
     return 0;
 }
 
-ef_poll_t *ef_poll_create(int count)
+static ef_poll_t *ef_poll_create(int count)
 {
     ef_pollsys_t *ep;
     size_t size = sizeof(ef_pollsys_t);
@@ -238,4 +238,4 @@ ef_poll_t *ef_poll_create(int count)
     return &ep->poll;
 }
 
-create_func_t create_poll = ef_poll_create;
+create_func_t ef_create_poll = ef_poll_create;

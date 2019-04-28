@@ -88,7 +88,7 @@ static int ef_epoll_free(ef_poll_t *p)
     return 0;
 }
 
-ef_poll_t *ef_epoll_create(int count)
+static ef_poll_t *ef_epoll_create(int count)
 {
     ef_epoll_t *ep;
     size_t size = sizeof(ef_epoll_t);
@@ -120,4 +120,4 @@ ef_poll_t *ef_epoll_create(int count)
     return &ep->poll;
 }
 
-create_func_t create_poll = ef_epoll_create;
+create_func_t ef_create_poll = ef_epoll_create;

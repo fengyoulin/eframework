@@ -43,7 +43,7 @@ struct _ef_poll {
     free_func_t free;
 };
 
-extern create_func_t create_poll;
+extern create_func_t ef_create_poll;
 
 /*
  * the macros are equal in poll and epoll

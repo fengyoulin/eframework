@@ -1,0 +1,7 @@
+yum install make gcc
+
+yum install gdb
+
+yum install strace
+
+yum install glibc-devel.i686 libgcc.i686
