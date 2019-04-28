@@ -28,9 +28,6 @@ struct _ef_list_entry_t {
     ef_list_entry_t *next;
 };
 
-#define CAST_PARENT_PTR(ptr, parent_type, field_name) \
-((parent_type*)((char*)ptr-(char*)&((parent_type*)0)->field_name))
-
 inline int ef_list_empty(ef_list_entry_t *head) __attribute__((always_inline));
 inline void ef_list_init(ef_list_entry_t *head) __attribute__((always_inline));
 inline void ef_list_remove(ef_list_entry_t *entry) __attribute__((always_inline));

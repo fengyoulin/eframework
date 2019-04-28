@@ -19,12 +19,16 @@
 // THE SOFTWARE.
 
 #include "buffer.h"
+#include "util.h"
 
 ef_buffer_t *ef_buffer_new(size_t cap)
 {
     ef_buffer_t *buf = (ef_buffer_t *)malloc(sizeof(ef_buffer_t));
     if (!buf) {
         return NULL;
+    }
+    if (cap) {
+        cap = ef_resize(cap, 0);
     }
     buf->ptr = cap ? (unsigned char*)malloc(cap) : NULL;
     if (cap && !buf->ptr) {
@@ -43,7 +47,7 @@ int ef_buffer_expand(ef_buffer_t *buf, size_t len)
     if (buf->cap - buf->len >= len) {
         return 0;
     }
-    cap = buf->len + len;
+    cap = ef_resize(buf->len + len, 0);
     if (buf->ptr) {
         ptr = (unsigned char*)realloc(buf->ptr, cap);
     } else {

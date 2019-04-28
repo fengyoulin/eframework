@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 #include "vector.h"
+#include "util.h"
 
 #define VECTOR_GROW_SIZE 8
 
@@ -27,6 +28,9 @@ ef_vector_t *ef_vector_new(size_t cap, val_dtor_t val_dtor)
     ef_vector_t *vec = (ef_vector_t *)malloc(sizeof(ef_vector_t));
     if (!vec) {
         return NULL;
+    }
+    if (cap) {
+        cap = ef_resize(cap, VECTOR_GROW_SIZE);
     }
     vec->cap = cap;
     vec->len = 0;
@@ -69,8 +73,8 @@ void ef_vector_free(ef_vector_t *vec, int destroy)
         return;
     }
     if (vec->val_dtor && vec->ptr) {
-        for(size_t idx = 0; idx < vec->len; ++idx) {
-            if(vec->ptr[idx]) {
+        for (size_t idx = 0; idx < vec->len; ++idx) {
+            if (vec->ptr[idx]) {
                 vec->val_dtor(vec->ptr[idx]);
             }
         }

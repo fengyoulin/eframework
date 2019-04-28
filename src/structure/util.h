@@ -18,36 +18,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#ifndef _BUFFER_IO_HEADER_
-#define _BUFFER_IO_HEADER_
+#ifndef _UTIL_HEADER_
+#define _UTIL_HEADER_
 
-#include "buffer.h"
+#define CAST_PARENT_PTR(ptr, parent_type, field_name) \
+((parent_type*)((char*)ptr-(char*)&((parent_type*)0)->field_name))
 
-typedef struct _ef_bio_reader {
-    int fd;
-    size_t offset;
-    ef_buffer_t *buffer;
-} ef_bio_reader_t;
+inline size_t ef_resize(size_t size, size_t min) __attribute__((always_inline));
 
-typedef struct _ef_bio_writer {
-    int fd;
-    ef_buffer_t *buffer;
-} ef_bio_writer_t;
+inline size_t ef_resize(size_t size, size_t min)
+{
+    if (size < min) {
+        size = min;
+    }
 
-ef_bio_reader_t *ef_bio_reader_new(int fd, size_t buf_size);
+    size -= 1;
+    size |= (size >> 1);
+    size |= (size >> 2);
+    size |= (size >> 4);
+    size |= (size >> 8);
+    size |= (size >> 16);
+#if __x86_64__
+    size |= (size >> 32);
+#endif
 
-void ef_bio_reader_free(ef_bio_reader_t *reader);
-
-ssize_t ef_bio_read(ef_bio_reader_t *reader, unsigned char *buf, size_t len);
-
-ssize_t ef_bio_reader_skip(ef_bio_reader_t *reader, size_t len);
-
-ef_bio_writer_t *ef_bio_writer_new(int fd, size_t buf_size);
-
-void ef_bio_writer_free(ef_bio_writer_t *writer);
-
-ssize_t ef_bio_write(ef_bio_writer_t *writer, unsigned char *buf, size_t len);
-
-ssize_t ef_bio_writer_flush(ef_bio_writer_t *writer);
+    return size + 1;
+}
 
 #endif

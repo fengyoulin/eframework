@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 #include "coroutine.h"
+#include "structure/util.h"
 
 void ef_coroutine_pool_init(ef_coroutine_pool_t *pool, size_t stack_size, int limit_min, int limit_max)
 {

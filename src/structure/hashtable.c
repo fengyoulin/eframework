@@ -80,14 +80,14 @@ static uint32_t hash_recap(uint32_t cap)
     if (cap <= HASH_TABLE_INIT_CAP) {
         return HASH_TABLE_INIT_CAP;
     }
-    
+
     cap -= 1;
     cap |= (cap >> 1);
     cap |= (cap >> 2);
     cap |= (cap >> 4);
     cap |= (cap >> 8);
     cap |= (cap >> 16);
-    
+
     return cap + 1;
 }
 

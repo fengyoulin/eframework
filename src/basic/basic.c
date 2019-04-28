@@ -30,7 +30,7 @@ long str2int(char *s,size_t len){
         negative = 1;
         s++;
     }
-    
+
     while(s < end){
         n = n*10 + (*s - '0');
         s++;
@@ -48,7 +48,7 @@ long hexstr2int(char *s,size_t len){
         negative = 1;
         s++;
     }
-    
+
     while(s < end){
         n = n*16 + (*s - '0');
         s++;

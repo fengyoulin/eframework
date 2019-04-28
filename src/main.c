@@ -141,7 +141,7 @@ long redis_proc(int fd,ef_routine_t *er)
         }
     }
     ef_redis_free_reply(rep);*/
-    
+
     // test error
     ret = ef_redis_cmd(con, "hmget %s", "h");
     if (ret < 0) {

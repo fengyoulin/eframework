@@ -166,7 +166,7 @@ ef_redis_reply_t* ef_redis_read_reply(ef_redis_connection_t *con)
     }
     con->end = r;
     con->seek = 0;
-    
+
     char *start = con->buf + con->seek;
     switch (*(start)) {
         case '-': {
@@ -329,7 +329,7 @@ static ef_redis_reply_t* parse_string(char *buf, size_t strlen, ef_redis_connect
         str->len = strlen;
         rep->reply.str = str;
     }
-    
+
     return rep;
 }
 
@@ -372,7 +372,7 @@ static ef_redis_reply_t * parse_array(char *buf, ef_redis_connection_t *con)
         printf("arr elem malloc error\n");
         return NULL;
     }
-    
+
     int i;
     for (i = 0; i < repnum; i++) {
         switch (*buf) {
@@ -409,7 +409,7 @@ static ef_redis_reply_t* parse_error(char *buf, ef_redis_connection_t *con)
         return rep;
     }
     rep->type = REPLY_TYPE_ERR;
-    
+
     char *type, *errinfo, *start, *pos, *end;
     end = strstr(buf, "\r\n");
     while (end == NULL) {
@@ -442,7 +442,7 @@ static ef_redis_reply_t* parse_error(char *buf, ef_redis_connection_t *con)
     while (*(start) == ' ') {
         start++;
     }
-    
+
     errinfo = (char *)malloc(end - start);
     errinfo = strncpy(errinfo, start, end - start);
     *(errinfo + (end - start)) = '\0';

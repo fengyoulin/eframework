@@ -18,7 +18,7 @@ ef_curl *ef_curl_init(char *host,int port,char *request_uri){
         }
         req->request_uri = strcpy(req->request_uri,request_uri);
     }
-    
+
     resp = (ef_curl_response *)malloc(sizeof(ef_curl_response));
     if(resp == NULL){
         free(req);
@@ -71,7 +71,7 @@ int ef_curl_set_header(ef_curl *cu,char *header,char *content){
     if(cu == NULL || cu->req == NULL){
         return -1;
     }
-    
+
     if(cu->req->headers == NULL){
         cu->req->headers = ef_stringtab_new(0);
         if(!cu->req->headers){
@@ -88,7 +88,7 @@ int ef_curl_set_request_body(ef_curl *cu,char *key,char *val){
     if(cu == NULL || cu->req == NULL){
         return -1;
     }
-    
+
     if(cu->req->request_body == NULL){
         cu->req->request_body = ef_stringtab_new(0);
         if(cu->req->request_body == NULL){
@@ -202,7 +202,7 @@ int http_build_request_header(ef_curl_request *req,char *buf,size_t cap){
         printf("hash_remove fail:%s\n",k);
         return res;
     }
-    
+
     printf("remain headers:%d\n",req->headers->used);
     return pos - buf;
 }
@@ -296,7 +296,7 @@ int http_parse_resp_chunked(ef_curl *cu,char *buf,size_t len){
     printf("prepare to parse chunked response\n");
     int buflen,chunklen,sendlen=0,r;
     char *pos,**start=&cu->resp->bufsend,**end=&cu->resp->bufend;
-    
+
 again:
     buflen = *end - *start;
     if(cu->resp->chunk_remain > 0){

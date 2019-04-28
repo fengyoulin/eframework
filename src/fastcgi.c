@@ -132,7 +132,7 @@ fcgi_request_t *fcgi_read_request(int sockfd)
         }
 
         if (fcgi_hdr.paddingLength) {
-            // ef_bio_read skip
+            ef_bio_reader_skip(reader, fcgi_hdr.paddingLength);
         }
     }
     if (buffer) {
@@ -174,7 +174,7 @@ fcgi_request_t *fcgi_read_request(int sockfd)
         }
 
         if (fcgi_hdr.paddingLength) {
-            // ef_bio_read skip
+            ef_bio_reader_skip(reader, fcgi_hdr.paddingLength);
         }
     }
 

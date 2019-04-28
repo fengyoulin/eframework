@@ -21,6 +21,7 @@
 #include "framework.h"
 #include "coroutine.h"
 #include "structure/list.h"
+#include "structure/util.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -301,7 +302,7 @@ exit_queue:
 
 int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
-    int retval, flags;
+    int retval, flags, error = 0;
     long events;
 
     if (er == NULL) {
@@ -318,6 +319,7 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
     if (!(flags & O_NONBLOCK)) {
         retval = fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
         if (retval < 0) {
+            error = errno;
             goto exit_conn;
         }
     }
@@ -325,12 +327,16 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
     retval = connect(sockfd, addr, addrlen);
     if (retval < 0) {
         if (errno != EINPROGRESS) {
+            error = errno;
             goto exit_conn;
         }
         retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLOUT, &er->poll_data, 0);
         if (retval < 0) {
+            error = errno;
             goto exit_conn;
         }
+    } else {
+        return retval;
     }
 
     /*
@@ -338,10 +344,11 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
      */
     events = ef_fiber_yield(er->co.fiber.sched, 0);
     if (events & (EF_POLLERR | EF_POLLHUP)) {
+        error = EBADF;
         retval = -1;
     } else if (events & EF_POLLOUT) {
-        int len = sizeof(retval);
-        getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &retval, &len);
+        int len = sizeof(error);
+        getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len);
     }
 
     /*
@@ -357,12 +364,15 @@ exit_conn:
     if (!(flags & O_NONBLOCK)) {
         fcntl(sockfd, F_SETFL, flags);
     }
+
+    errno = error;
+
     return retval;
 }
 
 ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
 {
-    int retval;
+    int retval, error = 0;
     long events;
 
     if (er == NULL) {
@@ -385,9 +395,11 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
      */
     events = ef_fiber_yield(er->co.fiber.sched, 0);
     if (events & EF_POLLERR) {
+        error = EBADF;
         retval = -1;
     } else if (events & (EF_POLLIN | EF_POLLHUP)) {
         retval = read(fd, buf, count);
+        error = errno;
     }
 
     /*
@@ -395,12 +407,14 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
      */
     er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, fd, 1);
 
+    errno = error;
+
     return retval;
 }
 
 ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count)
 {
-    int retval;
+    int retval, error = 0;
     long events;
 
     if (er == NULL) {
@@ -423,9 +437,11 @@ ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count
      */
     events = ef_fiber_yield(er->co.fiber.sched, 0);
     if (events & (EF_POLLERR | EF_POLLHUP)) {
+        error = EBADF;
         retval = -1;
     } else if(events & EF_POLLOUT) {
         retval = write(fd, buf, count);
+        error = errno;
     }
 
     /*
@@ -433,12 +449,14 @@ ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count
      */
     er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, fd, 1);
 
+    errno = error;
+
     return retval;
 }
 
 ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int flags)
 {
-    int retval;
+    int retval, error = 0;
     long events;
 
     if (er == NULL) {
@@ -461,9 +479,11 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
      */
     events = ef_fiber_yield(er->co.fiber.sched, 0);
     if (events & EF_POLLERR) {
+        error = EBADF;
         retval = -1;
     } else if (events & (EF_POLLIN | EF_POLLHUP)) {
         retval = recv(sockfd, buf, len, flags);
+        error = errno;
     }
 
     /*
@@ -471,12 +491,14 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
      */
     er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1);
 
+    errno = error;
+
     return retval;
 }
 
 ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t len, int flags)
 {
-    int retval;
+    int retval, error = 0;
     long events;
 
     if (er == NULL) {
@@ -499,15 +521,19 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
      */
     events = ef_fiber_yield(er->co.fiber.sched, 0);
     if (events & (EF_POLLERR | EF_POLLHUP)) {
+        error = EBADF;
         retval = -1;
     } else if (events & EF_POLLOUT) {
         retval = send(sockfd, buf, len, flags);
+        error = errno;
     }
 
     /*
      * dissociate fd after event fired
      */
     er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1);
+
+    errno = error;
 
     return retval;
 }

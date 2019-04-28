@@ -20,38 +20,51 @@
 
 #include "bufferio.h"
 #include "../framework.h"
+#include <errno.h>
 
-static size_t ef_must_read(int fd, unsigned char *buf, size_t len, size_t cap)
+static ssize_t ef_safe_read(int fd, unsigned char *buf, size_t len, size_t cap)
 {
-    size_t offset = 0;
-    ssize_t reads = 0;
+    ssize_t retval, offset = 0;
 
     if (cap < len) {
         cap = len;
     }
 
     while (offset < len) {
-        reads = ef_wrap_read(fd, buf + offset, cap - offset);
-        if (reads <= 0) {
+
+        errno = 0;
+ 
+        retval = ef_wrap_read(fd, buf + offset, cap - offset);
+
+        if (retval > 0) {
+            offset += retval;
+        } else if (retval == 0 && errno == 0) {
             break;
+        } else if (retval <= 0 && errno != 0 && errno != EINTR) {
+            return retval;
         }
-        offset += reads;
     }
+
     return offset;
 }
 
-static size_t ef_must_write(int fd, unsigned char *buf, size_t len)
+static ssize_t ef_safe_write(int fd, unsigned char *buf, size_t len)
 {
-    size_t offset = 0;
-    ssize_t written = 0;
+    ssize_t retval, offset = 0;
 
     while (offset < len) {
-        written = ef_wrap_write(fd, buf + offset, len - offset);
-        if (written <= 0) {
-            break;
+
+        errno = 0;
+
+        retval = ef_wrap_write(fd, buf + offset, len - offset);
+
+        if (retval > 0) {
+            offset += retval;
+        } else if (retval <= 0 && errno != 0 && errno != EINTR) {
+            return retval;
         }
-        offset += written;
     }
+
     return offset;
 }
 
@@ -81,12 +94,12 @@ void ef_bio_reader_free(ef_bio_reader_t *reader)
     free(reader);
 }
 
-size_t ef_bio_read(ef_bio_reader_t *reader, unsigned char *buf, size_t len)
+ssize_t ef_bio_read(ef_bio_reader_t *reader, unsigned char *buf, size_t len)
 {
     ef_buffer_t *buffer = reader->buffer;
-    size_t offset, reads, need;
+    ssize_t offset, reads, need;
 
-    if (len < buffer->len - reader->offset) {
+    if (len <= buffer->len - reader->offset) {
         memcpy(buf, buffer->ptr + reader->offset, len);
         reader->offset += len;
         return len;
@@ -97,15 +110,18 @@ size_t ef_bio_read(ef_bio_reader_t *reader, unsigned char *buf, size_t len)
         memcpy(buf, buffer->ptr + reader->offset, offset);
     }
 
-    reader->offset = 0;
     buffer->len = 0;
+    reader->offset = 0;
     need = len - offset;
 
     if (need > (buffer->cap >> 2)) {
-        return ef_must_read(reader->fd, buf + offset, need, 0);
+        return ef_safe_read(reader->fd, buf + offset, need, 0);
     }
 
-    reads = ef_must_read(reader->fd, buffer->ptr, need, buffer->cap);
+    reads = ef_safe_read(reader->fd, buffer->ptr, need, buffer->cap);
+    if (reads < 0) {
+        return reads;
+    }
     buffer->len = reads;
 
     if (need > reads) {
@@ -116,6 +132,32 @@ size_t ef_bio_read(ef_bio_reader_t *reader, unsigned char *buf, size_t len)
     reader->offset = need;
 
     return need;
+}
+
+ssize_t ef_bio_reader_skip(ef_bio_reader_t *reader, size_t len)
+{
+    ef_buffer_t *buffer = reader->buffer;
+    ssize_t reads, remain, need;
+
+    if (len <= buffer->len - reader->offset) {
+        reader->offset += len;
+        return len;
+    }
+
+    remain = len + reader->offset - buffer->len;
+    buffer->len = 0;
+    reader->offset = 0;
+
+    while (remain > 0) {
+        need = (remain < buffer->cap) ? remain : buffer->cap;
+        reads = ef_safe_read(reader->fd, buffer->ptr, need, need);
+        if (reads < 0) {
+            return reads;
+        }
+        remain -= reads;
+    }
+
+    return len;
 }
 
 ef_bio_writer_t *ef_bio_writer_new(int fd, size_t buf_size)
@@ -143,34 +185,38 @@ void ef_bio_writer_free(ef_bio_writer_t *writer)
     free(writer);
 }
 
-size_t ef_bio_write(ef_bio_writer_t *writer, unsigned char *buf, size_t len)
+ssize_t ef_bio_write(ef_bio_writer_t *writer, unsigned char *buf, size_t len)
 {
-    size_t written;
-    if (writer->buffer->len + len > writer->buffer->cap || len > (writer->buffer->cap >> 2)) {
+    if ((writer->buffer->len + len) > writer->buffer->cap || 
+        (writer->buffer->cap >> 2) < len) {
         if (writer->buffer->len) {
-            written = ef_must_write(writer->fd, writer->buffer->ptr, writer->buffer->len);
-            writer->buffer->len -= written;
-            if (writer->buffer->len) {
-                return 0;
+            if (ef_safe_write(writer->fd, writer->buffer->ptr, writer->buffer->len) < 0) {
+                return -1;
             }
+            writer->buffer->len = 0;
         }
-        if (len) {
-            return ef_must_write(writer->fd, buf, len);
-        }
+        return ef_safe_write(writer->fd, buf, len);
     }
-    if (ef_buffer_append(writer->buffer, buf, len)) {
-        return 0;
+
+    if (ef_buffer_append(writer->buffer, buf, len) < 0) {
+        return -1;
     }
+
     return len;
 }
 
-size_t ef_bio_writer_flush(ef_bio_writer_t *writer)
+ssize_t ef_bio_writer_flush(ef_bio_writer_t *writer)
 {
-    size_t written;
+    ssize_t written;
+
     if (!writer->buffer->len) {
         return 0;
     }
-    written = ef_must_write(writer->fd, writer->buffer->ptr, writer->buffer->len);
-    writer->buffer->len -= written;
+
+    written = ef_safe_write(writer->fd, writer->buffer->ptr, writer->buffer->len);
+    if (written < 0) {
+        return written;
+    }
+    writer->buffer->len = 0;
     return written;
 }
