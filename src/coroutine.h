@@ -50,6 +50,11 @@ typedef struct _ef_coroutine_t {
      * coroutine last run time, checked when doing pool shrink
      */
     struct timeval last_run_time;
+
+    /*
+     * run count of the coroutine
+     */
+    unsigned int run_count;
 } ef_coroutine_t;
 
 typedef struct _ef_coroutine_pool_t {
@@ -93,6 +98,11 @@ typedef struct _ef_coroutine_pool_t {
      * the number of exited coroutines in this pool
      */
     int free_count;
+
+    /*
+     * total run count of coroutines in the pool
+     */
+    unsigned long run_count;
 } ef_coroutine_pool_t;
 
 typedef ef_fiber_proc_t ef_coroutine_proc_t;

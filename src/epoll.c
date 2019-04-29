@@ -28,11 +28,11 @@ typedef struct epoll_event epoll_event_t;
 typedef struct _ef_epoll {
     ef_poll_t poll;
     int epfd;
-    int count;
+    int cap;
     epoll_event_t events[0];
 } ef_epoll_t;
 
-static int ef_epoll_associate(ef_poll_t *p, int fd, int events, void *ptr, int fired)
+static int ef_epoll_associate(ef_poll_t *p, int fd, int events, void *ptr, unsigned int id, int fired)
 {
     ef_epoll_t *ep;
     epoll_event_t *e;
@@ -64,8 +64,8 @@ static int ef_epoll_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisec
     int ret, idx;
     ef_epoll_t *ep = (ef_epoll_t *)p;
 
-    if (count > ep->count) {
-        count = ep->count;
+    if (count > ep->cap) {
+        count = ep->cap;
     }
 
     ret = epoll_wait(ep->epfd, &ep->events[0], count, millisecs);
@@ -88,7 +88,7 @@ static int ef_epoll_free(ef_poll_t *p)
     return 0;
 }
 
-static ef_poll_t *ef_epoll_create(int count)
+static ef_poll_t *ef_epoll_create(int cap)
 {
     ef_epoll_t *ep;
     size_t size = sizeof(ef_epoll_t);
@@ -96,11 +96,11 @@ static ef_poll_t *ef_epoll_create(int count)
     /*
      * event buffer at least 128
      */
-    if (count < 128) {
-        count = 128;
+    if (cap < 128) {
+        cap = 128;
     }
 
-    size += sizeof(epoll_event_t) * count;
+    size += sizeof(epoll_event_t) * cap;
     ep = (ef_epoll_t *)malloc(size);
     if (!ep) {
         return NULL;
@@ -116,7 +116,7 @@ static ef_poll_t *ef_epoll_create(int count)
     ep->poll.dissociate = ef_epoll_dissociate;
     ep->poll.wait = ef_epoll_wait;
     ep->poll.free = ef_epoll_free;
-    ep->count = count;
+    ep->cap = cap;
     return &ep->poll;
 }
 

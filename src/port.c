@@ -27,11 +27,11 @@
 typedef struct _ef_port {
     ef_poll_t poll;
     int ptfd;
-    int count;
+    int cap;
     port_event_t events[0];
 } ef_port_t;
 
-static int ef_port_associate(ef_poll_t *p, int fd, int events, void *ptr, int fired)
+static int ef_port_associate(ef_poll_t *p, int fd, int events, void *ptr, unsigned int id, int fired)
 {
     ef_port_t *ep = (ef_port_t *)p;
     return port_associate(ep->ptfd, PORT_SOURCE_FD, fd, events, ptr);
@@ -58,8 +58,8 @@ static int ef_port_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs
     timespec_t timeout;
     ef_port_t *ep = (ef_port_t *)p;
 
-    if (count > ep->count) {
-        count = ep->count;
+    if (count > ep->cap) {
+        count = ep->cap;
     }
 
     timeout.tv_sec = millisecs / 1000;
@@ -92,7 +92,7 @@ static int ef_port_free(ef_poll_t *p)
     return 0;
 }
 
-static ef_poll_t *ef_port_create(int count)
+static ef_poll_t *ef_port_create(int cap)
 {
     ef_port_t *ep;
     size_t size = sizeof(ef_port_t);
@@ -100,11 +100,11 @@ static ef_poll_t *ef_port_create(int count)
     /*
      * event buffer at least 128
      */
-    if (count < 128) {
-        count = 128;
+    if (cap < 128) {
+        cap = 128;
     }
 
-    size += sizeof(port_event_t) * count;
+    size += sizeof(port_event_t) * cap;
     ep = (ef_port_t *)malloc(size);
     if (!ep) {
         return NULL;
@@ -120,7 +120,7 @@ static ef_poll_t *ef_port_create(int count)
     ep->poll.dissociate = ef_port_dissociate;
     ep->poll.wait = ef_port_wait;
     ep->poll.free = ef_port_free;
-    ep->count = count;
+    ep->cap = cap;
     return &ep->poll;
 }
 

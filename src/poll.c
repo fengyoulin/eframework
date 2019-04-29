@@ -32,7 +32,7 @@ typedef struct _ef_poll_index {
 
 typedef struct _ef_pollsys {
     ef_poll_t poll;
-    int count;
+    int cap;
     int nfds;
     ef_poll_index_t *index;
     pollfd_t *pfds;
@@ -40,23 +40,23 @@ typedef struct _ef_pollsys {
 
 static int ef_poll_expand(ef_pollsys_t *ep, int fd)
 {
-    int count;
+    int cap;
     ef_poll_index_t *index;
     pollfd_t *pfds;
 
-    count = ep->count;
-    if (count > fd) {
+    cap = ep->cap;
+    if (cap > fd) {
         return 0;
     }
 
     /*
      * every time multiply 2
      */
-    while (count <= fd) {
-        count <<= 1;
+    while (cap <= fd) {
+        cap <<= 1;
     }
 
-    index = (ef_poll_index_t *)realloc(ep->index, sizeof(ef_poll_index_t) * count);
+    index = (ef_poll_index_t *)realloc(ep->index, sizeof(ef_poll_index_t) * cap);
     if (!index) {
         return -1;
     }
@@ -64,10 +64,10 @@ static int ef_poll_expand(ef_pollsys_t *ep, int fd)
     /*
      * set unused area to -1
      */
-    memset(index + ep->count, -1, sizeof(ef_poll_index_t) * (count - ep->count));
+    memset(index + ep->cap, -1, sizeof(ef_poll_index_t) * (cap - ep->cap));
     ep->index = index;
 
-    pfds = (pollfd_t *)realloc(ep->pfds, sizeof(pollfd_t) * count);
+    pfds = (pollfd_t *)realloc(ep->pfds, sizeof(pollfd_t) * cap);
     if (!pfds) {
         return -1;
     }
@@ -75,14 +75,14 @@ static int ef_poll_expand(ef_pollsys_t *ep, int fd)
     ep->pfds = pfds;
 
     /*
-     * update count to the new
+     * update cap to the new
      */
-    ep->count = count;
+    ep->cap = cap;
 
     return 0;
 }
 
-static int ef_poll_associate(ef_poll_t *p, int fd, int events, void *ptr, int fired)
+static int ef_poll_associate(ef_poll_t *p, int fd, int events, void *ptr, unsigned int id, int fired)
 {
     ef_pollsys_t *ep;
     pollfd_t *pf;
@@ -96,7 +96,7 @@ static int ef_poll_associate(ef_poll_t *p, int fd, int events, void *ptr, int fi
     }
 
     ep = (ef_pollsys_t *)p;
-    if (ep->count <= fd && ef_poll_expand(ep, fd) < 0) {
+    if (ep->cap <= fd && ef_poll_expand(ep, fd) < 0) {
         return -1;
     }
 
@@ -125,7 +125,7 @@ static int ef_poll_dissociate(ef_poll_t *p, int fd, int fired)
     /*
      * fd cannot been store here
      */
-    if (fd >= ep->count) {
+    if (fd >= ep->cap) {
         return 0;
     }
 
@@ -192,7 +192,7 @@ static int ef_poll_free(ef_poll_t *p)
     return 0;
 }
 
-static ef_poll_t *ef_poll_create(int count)
+static ef_poll_t *ef_poll_create(int cap)
 {
     ef_pollsys_t *ep;
     size_t size = sizeof(ef_pollsys_t);
@@ -205,11 +205,11 @@ static ef_poll_t *ef_poll_create(int count)
     /*
      * event buffer at least 128
      */
-    if (count < 128) {
-        count = 128;
+    if (cap < 128) {
+        cap = 128;
     }
 
-    size = sizeof(ef_poll_index_t) * count;
+    size = sizeof(ef_poll_index_t) * cap;
     ep->index = (ef_poll_index_t *)malloc(size);
     if (!ep->index) {
         free(ep);
@@ -221,7 +221,7 @@ static ef_poll_t *ef_poll_create(int count)
      */
     memset(ep->index, -1, size);
 
-    size = sizeof(pollfd_t) * count;
+    size = sizeof(pollfd_t) * cap;
     ep->pfds = (pollfd_t *)malloc(size);
     if (!ep->pfds) {
         free(ep->index);
@@ -233,7 +233,7 @@ static ef_poll_t *ef_poll_create(int count)
     ep->poll.dissociate = ef_poll_dissociate;
     ep->poll.wait = ef_poll_wait;
     ep->poll.free = ef_poll_free;
-    ep->count = count;
+    ep->cap = cap;
     ep->nfds = 0;
     return &ep->poll;
 }

@@ -31,6 +31,7 @@ void ef_coroutine_pool_init(ef_coroutine_pool_t *pool, size_t stack_size, int li
     ef_list_init(&pool->free_list);
     pool->full_count = 0;
     pool->free_count = 0;
+    pool->run_count = 0;
 }
 
 ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, size_t header_size, ef_coroutine_proc_t fiber_proc, void *param)
@@ -59,6 +60,8 @@ ef_coroutine_t *ef_coroutine_create(ef_coroutine_pool_t *pool, size_t header_siz
         return NULL;
     }
 
+    co->run_count = 0;
+
     ++pool->full_count;
     ef_list_insert_after(&pool->full_list, &co->full_entry);
     return co;
@@ -77,9 +80,11 @@ long ef_coroutine_resume(ef_coroutine_pool_t *pool, ef_coroutine_t *co, long to_
      * add to free_list when exited
      */
     if (ef_fiber_is_exited(&co->fiber)) {
+        ++co->run_count;
         gettimeofday(&co->last_run_time, NULL);
         ef_list_insert_after(&pool->free_list, &co->free_entry);
         ++pool->free_count;
+        ++pool->run_count;
     }
 
     return retval;

@@ -174,7 +174,7 @@ exit:
 }
 
 // for performance test
-// forward port 80 <=> 90, 8080 <=> 90
+// forward port 8080 <=> 90
 // let a http server run at localhost:90
 // use HTTP/1.0 or set http header Connection: close
 long forward_proc(int fd, ef_routine_t *er)

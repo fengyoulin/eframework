@@ -156,7 +156,7 @@ int ef_run_loop(ef_runtime_t *rt)
     ef_list_entry_t *ent = ef_list_entry_after(&rt->listen_list);
     while (ent != &rt->listen_list) {
         ef_listen_info_t *li = CAST_PARENT_PTR(ent, ef_listen_info_t, list_entry);
-        int ret = rt->p->associate(rt->p, li->poll_data.fd, EF_POLLIN, &li->poll_data, 0);
+        int ret = rt->p->associate(rt->p, li->poll_data.fd, EF_POLLIN, &li->poll_data, 0, 0);
         if (ret < 0) {
             return ret;
         }
@@ -197,7 +197,7 @@ int ef_run_loop(ef_runtime_t *rt)
                 /*
                  * solaris event port will auto dissociate fd after event fired
                  */
-                rt->p->associate(rt->p, ed->fd, EF_POLLIN, ed, 1);
+                rt->p->associate(rt->p, ed->fd, EF_POLLIN, ed, 0, 1);
             } else if (ed->type == FD_TYPE_RWC) {
                 ef_coroutine_resume(&rt->co_pool, &ed->routine_ptr->co, evts[i].events);
             }
@@ -330,7 +330,7 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
             error = errno;
             goto exit_conn;
         }
-        retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLOUT, &er->poll_data, 0);
+        retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLOUT, &er->poll_data, er->co.run_count, 0);
         if (retval < 0) {
             error = errno;
             goto exit_conn;
@@ -385,7 +385,7 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
     /*
      * always associate
      */
-    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, fd, EF_POLLIN, &er->poll_data, 0);
+    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, fd, EF_POLLIN, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
     }
@@ -427,7 +427,7 @@ ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count
     /*
      * always associate
      */
-    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, fd, EF_POLLOUT, &er->poll_data, 0);
+    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, fd, EF_POLLOUT, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
     }
@@ -469,7 +469,7 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
     /*
      * always associate
      */
-    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLIN, &er->poll_data, 0);
+    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLIN, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
     }
@@ -511,7 +511,7 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
     /*
      * always associate
      */
-    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLOUT, &er->poll_data, 0);
+    retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLOUT, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
     }
