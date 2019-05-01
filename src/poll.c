@@ -115,7 +115,7 @@ static int ef_poll_associate(ef_poll_t *p, int fd, int events, void *ptr, unsign
     return 0;
 }
 
-static int ef_poll_dissociate(ef_poll_t *p, int fd, int fired)
+static int ef_poll_dissociate(ef_poll_t *p, int fd, int fired, int onclose)
 {
     ef_pollsys_t *ep;
     int idx, last;

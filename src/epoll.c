@@ -52,7 +52,7 @@ static int ef_epoll_associate(ef_poll_t *p, int fd, int events, void *ptr, unsig
     return epoll_ctl(ep->epfd, EPOLL_CTL_ADD, fd, e);
 }
 
-static int ef_epoll_dissociate(ef_poll_t *p, int fd, int fired)
+static int ef_epoll_dissociate(ef_poll_t *p, int fd, int fired, int onclose)
 {
     ef_epoll_t *ep = (ef_epoll_t *)p;
     epoll_event_t *e = &ep->events[0];

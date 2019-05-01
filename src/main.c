@@ -218,7 +218,7 @@ long forward_proc(int fd, ef_routine_t *er)
         }
     }
 exit_proc:
-    close(sockfd);
+    ef_routine_close(er, sockfd);
     return ret;
 }
 

@@ -37,7 +37,7 @@ static int ef_port_associate(ef_poll_t *p, int fd, int events, void *ptr, unsign
     return port_associate(ep->ptfd, PORT_SOURCE_FD, fd, events, ptr);
 }
 
-static int ef_port_dissociate(ef_poll_t *p, int fd, int fired)
+static int ef_port_dissociate(ef_poll_t *p, int fd, int fired, int onclose)
 {
     ef_port_t *ep;
 

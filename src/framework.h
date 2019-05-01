@@ -82,11 +82,15 @@ int ef_init(ef_runtime_t *rt, size_t stack_size, int limit_min, int limit_max, i
 int ef_add_listen(ef_runtime_t *rt, int socket, ef_routine_proc_t ef_proc);
 int ef_run_loop(ef_runtime_t *rt);
 
+int ef_routine_close(ef_routine_t *er, int fd);
 int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count);
 ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count);
 ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int flags);
 ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t len, int flags);
+
+#define ef_wrap_close(fd) \
+    ef_routine_close(NULL, fd)
 
 #define ef_wrap_connect(sockfd, addr, addrlen) \
     ef_routine_connect(NULL, sockfd, addr, addrlen)

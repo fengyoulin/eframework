@@ -51,7 +51,7 @@ long ef_proc(void *param)
     /*
      * it may or may not closed by the user code
      */
-    close(fd);
+    ef_routine_close(er, fd);
 
     return retval;
 }
@@ -254,7 +254,7 @@ exit_queue:
                      * close listening socket
                      */
                     if (li->poll_data.fd >= 0) {
-                        rt->p->dissociate(rt->p, li->poll_data.fd, 0);
+                        rt->p->dissociate(rt->p, li->poll_data.fd, 0, 0);
                         close(li->poll_data.fd);
                         li->poll_data.fd = -1;
                     }
@@ -298,6 +298,20 @@ exit_queue:
         }
     }
     return 0;
+}
+
+int ef_routine_close(ef_routine_t *er, int fd)
+{
+    if (er == NULL) {
+        er = ef_routine_current();
+    }
+
+    /*
+     * dissociate fd before close
+     */
+    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, fd, 0, 1);
+
+    return close(fd);
 }
 
 int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr, socklen_t addrlen)
@@ -354,7 +368,7 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
     /*
      * dissociate fd after event fired
      */
-    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1);
+    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1, 0);
 
 exit_conn:
 
@@ -405,7 +419,7 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
     /*
      * dissociate fd after event fired
      */
-    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, fd, 1);
+    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, fd, 1, 0);
 
     errno = error;
 
@@ -447,7 +461,7 @@ ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count
     /*
      * dissociate fd after event fired
      */
-    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, fd, 1);
+    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, fd, 1, 0);
 
     errno = error;
 
@@ -489,7 +503,7 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
     /*
      * dissociate fd after event fired
      */
-    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1);
+    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1, 0);
 
     errno = error;
 
@@ -531,7 +545,7 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
     /*
      * dissociate fd after event fired
      */
-    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1);
+    er->poll_data.runtime_ptr->p->dissociate(er->poll_data.runtime_ptr->p, sockfd, 1, 0);
 
     errno = error;
 

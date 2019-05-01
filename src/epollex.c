@@ -178,7 +178,7 @@ static int ef_epoll_associate(ef_poll_t *p, int fd, int events, void *ptr, unsig
     return 0;
 }
 
-static int ef_epoll_dissociate(ef_poll_t *p, int fd, int fired)
+static int ef_epoll_dissociate(ef_poll_t *p, int fd, int fired, int onclose)
 {
     ef_epoll_t *ep;
     ef_event_pair_t *pp, tmp;
@@ -203,16 +203,19 @@ static int ef_epoll_dissociate(ef_poll_t *p, int fd, int fired)
 
     /*
      * free the just masked added fd
+     * or remove on close
      */
-    if (idx < ep->modified && pp->op == EPOLL_CTL_ADD) {
+    if ((idx < ep->modified && pp->op == EPOLL_CTL_ADD) || onclose) {
 
-        --ep->modified;
         if (idx < ep->modified) {
-            ep->index[pp->new_fd] = ep->modified;
-            ep->index[ep->pairs[ep->modified].new_fd] = idx;
-            memcpy(&tmp, pp, sizeof(ef_event_pair_t));
-            memcpy(pp, &ep->pairs[ep->modified], sizeof(ef_event_pair_t));
-            memcpy(&ep->pairs[ep->modified], &tmp, sizeof(ef_event_pair_t));
+            --ep->modified;
+            if (idx < ep->modified) {
+                ep->index[pp->new_fd] = ep->modified;
+                ep->index[ep->pairs[ep->modified].new_fd] = idx;
+                memcpy(&tmp, pp, sizeof(ef_event_pair_t));
+                memcpy(pp, &ep->pairs[ep->modified], sizeof(ef_event_pair_t));
+                memcpy(&ep->pairs[ep->modified], &tmp, sizeof(ef_event_pair_t));
+            }
         }
 
         idx = ep->modified;
@@ -273,13 +276,8 @@ static int ef_epoll_apply(ef_epoll_t *ep)
             pp->old_event.ptr = pp->new_event.ptr;
         }
 
-        /*
-         * 1) EBADF the fd maybe closed and auto deleted from epoll
-         * 2) ENOENT it maybe closed in one coroutine and open returned
-         * the same value in another coroutine
-         */
         retval = epoll_ctl(ep->epfd, pp->op, pp->new_fd, pe);
-        if (retval < 0 && errno != 0 && errno != EBADF && errno != ENOENT) {
+        if (retval < 0) {
             return retval;
         }
 
