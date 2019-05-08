@@ -31,7 +31,7 @@ typedef struct _ef_port {
     port_event_t events[0];
 } ef_port_t;
 
-static int ef_port_associate(ef_poll_t *p, int fd, int events, void *ptr, unsigned int id, int fired)
+static int ef_port_associate(ef_poll_t *p, int fd, int events, void *ptr, int fired)
 {
     ef_port_t *ep = (ef_port_t *)p;
     return port_associate(ep->ptfd, PORT_SOURCE_FD, fd, events, ptr);

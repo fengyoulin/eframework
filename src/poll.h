@@ -26,7 +26,7 @@ typedef struct _ef_poll ef_poll_t;
 
 typedef ef_poll_t *(*create_func_t)(int cap);
 
-typedef int (*associate_func_t)(ef_poll_t *p, int fd, int events, void *ptr, unsigned int id, int fired);
+typedef int (*associate_func_t)(ef_poll_t *p, int fd, int events, void *ptr, int fired);
 typedef int (*dissociate_func_t)(ef_poll_t *p, int fd, int fired, int onclose);
 typedef int (*unset_func_t)(ef_poll_t *p, int fd, int events);
 typedef int (*wait_func_t)(ef_poll_t *p, ef_event_t *evts, int count, int millisecs);

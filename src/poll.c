@@ -82,7 +82,7 @@ static int ef_poll_expand(ef_pollsys_t *ep, int fd)
     return 0;
 }
 
-static int ef_poll_associate(ef_poll_t *p, int fd, int events, void *ptr, unsigned int id, int fired)
+static int ef_poll_associate(ef_poll_t *p, int fd, int events, void *ptr, int fired)
 {
     ef_pollsys_t *ep;
     pollfd_t *pf;
