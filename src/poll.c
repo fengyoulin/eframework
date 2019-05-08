@@ -154,6 +154,11 @@ static int ef_poll_dissociate(ef_poll_t *p, int fd, int fired, int onclose)
     return 0;
 }
 
+static int ef_poll_unset(ef_poll_t *p, int fd, int events)
+{
+    return 0;
+}
+
 static int ef_poll_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs)
 {
     int ret, idx, cnt;
@@ -231,6 +236,7 @@ static ef_poll_t *ef_poll_create(int cap)
 
     ep->poll.associate = ef_poll_associate;
     ep->poll.dissociate = ef_poll_dissociate;
+    ep->poll.unset = ef_poll_unset;
     ep->poll.wait = ef_poll_wait;
     ep->poll.free = ef_poll_free;
     ep->cap = cap;

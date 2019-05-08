@@ -74,6 +74,15 @@ inline int ef_routine_run(ef_runtime_t *rt, ef_routine_proc_t proc, int socket)
 inline int ef_queue_fd(ef_runtime_t *rt, ef_listen_info_t *li, int fd)
 {
     ef_queue_fd_t *qf;
+    int retval, flags;
+
+    flags = fcntl(fd, F_GETFL);
+    if (!(flags & O_NONBLOCK)) {
+        retval = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        if (retval < 0) {
+            return retval;
+        }
+    }
 
     if (!ef_list_empty(&rt->free_fd_list)) {
         qf = CAST_PARENT_PTR(ef_list_remove_after(&rt->free_fd_list), ef_queue_fd_t, list_entry);
@@ -181,6 +190,7 @@ int ef_run_loop(ef_runtime_t *rt)
                 while (1) {
                     int socket = accept(ed->fd, NULL, NULL);
                     if (socket < 0) {
+                        rt->p->unset(rt->p, ed->fd, EF_POLLIN);
                         break;
                     }
                     ef_listen_info_t *li = CAST_PARENT_PTR(ed, ef_listen_info_t, poll_data);
@@ -372,13 +382,6 @@ int ef_routine_connect(ef_routine_t *er, int sockfd, const struct sockaddr *addr
 
 exit_conn:
 
-    /*
-     * restore block mode if needed
-     */
-    if (!(flags & O_NONBLOCK)) {
-        fcntl(sockfd, F_SETFL, flags);
-    }
-
     errno = error;
 
     return retval;
@@ -386,8 +389,9 @@ exit_conn:
 
 ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
 {
-    int retval, error = 0;
+    int error = 0;
     long events;
+    ssize_t retval;
 
     if (er == NULL) {
         er = ef_routine_current();
@@ -402,7 +406,11 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
     retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, fd, EF_POLLIN, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
+    } else if (retval > 0) {
+        goto ready;
     }
+
+yield:
 
     /*
      * yield and wait event
@@ -412,8 +420,14 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
         error = EBADF;
         retval = -1;
     } else if (events & (EF_POLLIN | EF_POLLHUP)) {
+ready:
         retval = read(fd, buf, count);
-        error = errno;
+        if (retval < 0 && errno == EAGAIN) {
+            er->poll_data.runtime_ptr->p->unset(er->poll_data.runtime_ptr->p, fd, EF_POLLIN | EF_POLLHUP);
+            goto yield;
+        } else if (retval < 0) {
+            error = errno;
+        }
     }
 
     /*
@@ -428,8 +442,9 @@ ssize_t ef_routine_read(ef_routine_t *er, int fd, void *buf, size_t count)
 
 ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count)
 {
-    int retval, error = 0;
+    int error = 0;
     long events;
+    ssize_t retval;
 
     if (er == NULL) {
         er = ef_routine_current();
@@ -444,7 +459,11 @@ ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count
     retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, fd, EF_POLLOUT, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
+    } else if (retval > 0) {
+        goto ready;
     }
+
+yield:
 
     /*
      * yield and wait event
@@ -454,8 +473,14 @@ ssize_t ef_routine_write(ef_routine_t *er, int fd, const void *buf, size_t count
         error = EBADF;
         retval = -1;
     } else if(events & EF_POLLOUT) {
+ready:
         retval = write(fd, buf, count);
-        error = errno;
+        if (retval < 0 && errno == EAGAIN) {
+            er->poll_data.runtime_ptr->p->unset(er->poll_data.runtime_ptr->p, fd, EF_POLLOUT);
+            goto yield;
+        } else if (retval < 0) {
+            error = errno;
+        }
     }
 
     /*
@@ -486,7 +511,11 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
     retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLIN, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
+    } else if (retval > 0) {
+        goto ready;
     }
+
+yield:
 
     /*
      * yield and wait event
@@ -496,8 +525,14 @@ ssize_t ef_routine_recv(ef_routine_t *er, int sockfd, void *buf, size_t len, int
         error = EBADF;
         retval = -1;
     } else if (events & (EF_POLLIN | EF_POLLHUP)) {
+ready:
         retval = recv(sockfd, buf, len, flags);
-        error = errno;
+        if (retval < 0 && errno == EAGAIN) {
+            er->poll_data.runtime_ptr->p->unset(er->poll_data.runtime_ptr->p, sockfd, EF_POLLIN | EF_POLLHUP);
+            goto yield;
+        } else if (retval < 0) {
+            error = errno;
+        }
     }
 
     /*
@@ -521,14 +556,17 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
 
     er->poll_data.type = FD_TYPE_RWC;
     er->poll_data.fd = sockfd;
-
     /*
      * always associate
      */
     retval = er->poll_data.runtime_ptr->p->associate(er->poll_data.runtime_ptr->p, sockfd, EF_POLLOUT, &er->poll_data, er->co.run_count, 0);
     if (retval < 0) {
         return retval;
+    } else if (retval > 0) {
+        goto ready;
     }
+
+yield:
 
     /*
      * yield and wait event
@@ -537,9 +575,15 @@ ssize_t ef_routine_send(ef_routine_t *er, int sockfd, const void *buf, size_t le
     if (events & (EF_POLLERR | EF_POLLHUP)) {
         error = EBADF;
         retval = -1;
-    } else if (events & EF_POLLOUT) {
+    } else if(events & EF_POLLOUT) {
+ready:
         retval = send(sockfd, buf, len, flags);
-        error = errno;
+        if (retval < 0 && errno == EAGAIN) {
+            er->poll_data.runtime_ptr->p->unset(er->poll_data.runtime_ptr->p, sockfd, EF_POLLOUT);
+            goto yield;
+        } else if (retval < 0) {
+            error = errno;
+        }
     }
 
     /*

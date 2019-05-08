@@ -52,6 +52,11 @@ static int ef_port_dissociate(ef_poll_t *p, int fd, int fired, int onclose)
     return port_dissociate(ep->ptfd, PORT_SOURCE_FD, fd);
 }
 
+static int ef_port_unset(ef_poll_t *p, int fd, int events)
+{
+    return 0;
+}
+
 static int ef_port_wait(ef_poll_t *p, ef_event_t *evts, int count, int millisecs)
 {
     uint_t nget, idx;
@@ -118,6 +123,7 @@ static ef_poll_t *ef_port_create(int cap)
 
     ep->poll.associate = ef_port_associate;
     ep->poll.dissociate = ef_port_dissociate;
+    ep->poll.unset = ef_port_unset;
     ep->poll.wait = ef_port_wait;
     ep->poll.free = ef_port_free;
     ep->cap = cap;

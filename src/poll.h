@@ -28,6 +28,7 @@ typedef ef_poll_t *(*create_func_t)(int cap);
 
 typedef int (*associate_func_t)(ef_poll_t *p, int fd, int events, void *ptr, unsigned int id, int fired);
 typedef int (*dissociate_func_t)(ef_poll_t *p, int fd, int fired, int onclose);
+typedef int (*unset_func_t)(ef_poll_t *p, int fd, int events);
 typedef int (*wait_func_t)(ef_poll_t *p, ef_event_t *evts, int count, int millisecs);
 typedef int (*free_func_t)(ef_poll_t *p);
 
@@ -39,6 +40,7 @@ struct _ef_event {
 struct _ef_poll {
     associate_func_t associate;
     dissociate_func_t dissociate;
+    unset_func_t unset;
     wait_func_t wait;
     free_func_t free;
 };
